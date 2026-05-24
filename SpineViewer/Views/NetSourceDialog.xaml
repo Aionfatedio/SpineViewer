@@ -84,6 +84,7 @@
                          SelectedItem="{Binding SelectedRepo}"
                          AllowDrop="True"
                          PreviewMouseLeftButtonDown="RepoListBox_PreviewMouseLeftButtonDown"
+                         PreviewMouseRightButtonDown="RepoListBox_PreviewMouseRightButtonDown"
                          MouseMove="RepoListBox_MouseMove"
                          MouseLeftButtonUp="RepoListBox_MouseLeftButtonUp"
                          DragEnter="RepoListBox_DragEnter"
@@ -165,22 +166,22 @@
                             <MenuItem Header="{DynamicResource Str_NetSourceRefreshRepo}"
                                       InputGestureText="Ctrl+R"
                                       Command="{Binding Cmd_RefreshRepo}"
-                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                                      CommandParameter="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
                             <MenuItem Header="{DynamicResource Str_NetSourceMoveUp}"
                                       InputGestureText="Alt+W"
                                       Command="{Binding Cmd_MoveUpRepo}"
-                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                                      CommandParameter="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
                             <MenuItem Header="{DynamicResource Str_NetSourceMoveDown}"
                                       InputGestureText="Alt+S"
                                       Command="{Binding Cmd_MoveDownRepo}"
-                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                                      CommandParameter="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
                             <MenuItem Header="{DynamicResource Str_NetSourceVisitRepo}"
                                       Command="{Binding Cmd_VisitRepoUrl}"
-                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                                      CommandParameter="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
                             <MenuItem Header="{DynamicResource Str_NetSourceRemoveRepo}"
                                       InputGestureText="Delete"
                                       Command="{Binding Cmd_RemoveRepo}"
-                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                                      CommandParameter="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
                         </ContextMenu>
                     </ListBox.ContextMenu>
                 </ListBox>

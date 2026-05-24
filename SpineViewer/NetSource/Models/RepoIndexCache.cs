@@ -22,6 +22,8 @@ namespace SpineViewer.NetSource.Models
 
         public string IndexedAt { get; set; } = string.Empty;
 
+        public bool CommitMetadataResolved { get; set; }
+
         public List<SpineBundle> Bundles { get; set; } = [];
 
         public bool Truncated { get; set; }

@@ -80,6 +80,23 @@ namespace SpineViewer.Views
                 list.Focus();
         }
 
+        private void RepoListBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not ListBox list) return;
+
+            var container = ((DependencyObject)e.OriginalSource)?.GetParent<ListBoxItem>(true);
+            if (container is null)
+            {
+                list.Tag = null;
+                return;
+            }
+
+            var item = list.ItemContainerGenerator.ItemFromContainer(container) as NetSourceRepoItemViewModel;
+            list.Tag = item;
+            if (item is not null)
+                list.SelectedItem = item;
+        }
+
         private void RepoListBox_MouseMove(object sender, MouseEventArgs e)
         {
             if (e.LeftButton != MouseButtonState.Pressed) return;

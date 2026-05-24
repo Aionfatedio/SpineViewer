@@ -42,6 +42,8 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
         private readonly Dictionary<string, string> _repoDisplayNames = [];
 
+        private readonly CancellationTokenSource _indexCts = new();
+
         private CancellationTokenSource? _downloadCts;
 
         public NetSourceDialogViewModel(MainWindowViewModel vmMain)
@@ -232,7 +234,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 Branch = parsed.Branch
             };
 
-            if (Repos.Any(r => string.Equals(r.Config.RepoId, cfg.RepoId, StringComparison.OrdinalIgnoreCase)))
+            if (IsDuplicateRepo(cfg))
             {
                 MessagePopupService.Info("该仓库已添加");
                 return;
@@ -242,20 +244,33 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             Repos.Add(item);
             NewRepoInput = string.Empty;
             PersistRepoList();
+            NotifyRepoCommandStates();
 
             _ = RefreshRepoAsync(item, forceFull: false);
         }
 
+        private bool IsDuplicateRepo(RepoSourceConfig cfg)
+        {
+            static bool IsBlank(string? s) => string.IsNullOrWhiteSpace(s);
+
+            return Repos.Any(r =>
+                string.Equals(r.Config.Host, cfg.Host, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(r.Config.Owner, cfg.Owner, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(r.Config.Name, cfg.Name, StringComparison.OrdinalIgnoreCase)
+                && (string.Equals(r.Config.Branch ?? string.Empty, cfg.Branch ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+                    || IsBlank(cfg.Branch)));
+        }
+
         public RelayCommand<NetSourceRepoItemViewModel?> Cmd_RefreshRepo => _cmd_RefreshRepo ??= new(item =>
         {
-            if (item is null) return;
+            if (!CanRefreshRepo(item)) return;
             _ = RefreshRepoAsync(item, forceFull: true);
-        });
+        }, CanRefreshRepo);
         private RelayCommand<NetSourceRepoItemViewModel?>? _cmd_RefreshRepo;
 
         public RelayCommand<NetSourceRepoItemViewModel?> Cmd_RemoveRepo => _cmd_RemoveRepo ??= new(item =>
         {
-            if (item is null) return;
+            if (!CanRemoveRepo(item)) return;
             if (!MessagePopupService.OKCancel($"确定要移除仓库 {item.DisplayName} 及其本地缓存吗?"))
                 return;
 
@@ -265,34 +280,35 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             _indexService.DeleteCache(item.Config.RepoId);
             PersistRepoList();
             RefreshSearch();
-        });
+            NotifyRepoCommandStates();
+        }, CanRemoveRepo);
         private RelayCommand<NetSourceRepoItemViewModel?>? _cmd_RemoveRepo;
 
         public RelayCommand<NetSourceRepoItemViewModel?> Cmd_MoveUpRepo => _cmd_MoveUpRepo ??= new(item =>
         {
-            if (item is null) return;
+            if (!CanMoveUpRepo(item)) return;
             var idx = Repos.IndexOf(item);
-            if (idx <= 0) return;
             Repos.Move(idx, idx - 1);
             PersistRepoList();
             RefreshSearch();
-        });
+            NotifyRepoCommandStates();
+        }, CanMoveUpRepo);
         private RelayCommand<NetSourceRepoItemViewModel?>? _cmd_MoveUpRepo;
 
         public RelayCommand<NetSourceRepoItemViewModel?> Cmd_MoveDownRepo => _cmd_MoveDownRepo ??= new(item =>
         {
-            if (item is null) return;
+            if (!CanMoveDownRepo(item)) return;
             var idx = Repos.IndexOf(item);
-            if (idx < 0 || idx >= Repos.Count - 1) return;
             Repos.Move(idx, idx + 1);
             PersistRepoList();
             RefreshSearch();
-        });
+            NotifyRepoCommandStates();
+        }, CanMoveDownRepo);
         private RelayCommand<NetSourceRepoItemViewModel?>? _cmd_MoveDownRepo;
 
         public RelayCommand<NetSourceRepoItemViewModel?> Cmd_VisitRepoUrl => _cmd_VisitRepoUrl ??= new(item =>
         {
-            if (item is null) return;
+            if (!CanUseRepo(item)) return;
             try
             {
                 Process.Start(new ProcessStartInfo(item.WebUrl) { UseShellExecute = true });
@@ -303,8 +319,39 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 _logger.Error("Failed to open repo url {0}: {1}", item.WebUrl, ex.Message);
                 MessagePopupService.Warn("无法打开浏览器: " + ex.Message);
             }
-        });
+        }, CanUseRepo);
         private RelayCommand<NetSourceRepoItemViewModel?>? _cmd_VisitRepoUrl;
+
+        private bool CanUseRepo(NetSourceRepoItemViewModel? item)
+            => item is not null && Repos.Contains(item);
+
+        private bool CanRefreshRepo(NetSourceRepoItemViewModel? item)
+            => CanUseRepo(item) && !item!.IsBusy;
+
+        private bool CanRemoveRepo(NetSourceRepoItemViewModel? item)
+            => CanUseRepo(item) && !item!.IsBusy;
+
+        private bool CanMoveUpRepo(NetSourceRepoItemViewModel? item)
+        {
+            if (!CanUseRepo(item)) return false;
+            return Repos.IndexOf(item!) > 0;
+        }
+
+        private bool CanMoveDownRepo(NetSourceRepoItemViewModel? item)
+        {
+            if (!CanUseRepo(item)) return false;
+            var idx = Repos.IndexOf(item!);
+            return idx >= 0 && idx < Repos.Count - 1;
+        }
+
+        private void NotifyRepoCommandStates()
+        {
+            _cmd_RefreshRepo?.NotifyCanExecuteChanged();
+            _cmd_RemoveRepo?.NotifyCanExecuteChanged();
+            _cmd_MoveUpRepo?.NotifyCanExecuteChanged();
+            _cmd_MoveDownRepo?.NotifyCanExecuteChanged();
+            _cmd_VisitRepoUrl?.NotifyCanExecuteChanged();
+        }
 
         public void ReorderRepo(int srcIndex, int dstIndex)
         {
@@ -314,12 +361,16 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             Repos.Move(srcIndex, dstIndex);
             PersistRepoList();
             RefreshSearch();
+            NotifyRepoCommandStates();
         }
 
         public RelayCommand Cmd_RefreshAll => _cmd_RefreshAll ??= new(() =>
         {
             foreach (var item in Repos.ToArray())
+            {
+                if (!CanRefreshRepo(item)) continue;
                 _ = RefreshRepoAsync(item, forceFull: true);
+            }
         });
         private RelayCommand? _cmd_RefreshAll;
 
@@ -449,7 +500,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token);
                 DownloadAndImportTask(reqs, reporter, linked.Token);
-            }, "下载并导入网络模型");
+            }, "下载模型……");
         }
 
         private void DownloadAndImportTask(
@@ -550,11 +601,19 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         {
             item.Status = RepoIndexStatus.Indexing;
             item.ErrorMessage = null;
+            item.IndexDone = 0;
+            item.IndexTotal = 0;
+            NotifyRepoCommandStates();
+            var ct = _indexCts.Token;
 
             try
             {
-                var ct = CancellationToken.None;
-                var cache = await Task.Run(() => _indexService.RefreshAsync(item.Config, forceFull, ct), ct);
+                var progress = new Progress<RepoIndexProgress>(p =>
+                {
+                    item.IndexDone = p.Done;
+                    item.IndexTotal = p.Total;
+                });
+                var cache = await Task.Run(() => _indexService.RefreshAsync(item.Config, forceFull, ct, progress), ct);
 
                 _caches[item.Config.RepoId] = cache;
                 _repoDisplayNames[item.Config.RepoId] = item.DisplayName;
@@ -568,20 +627,36 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                     item.Status = cache.Truncated ? RepoIndexStatus.Stale : RepoIndexStatus.Ready;
                     PersistRepoList();
                     RefreshSearch();
+                    NotifyRepoCommandStates();
                 });
             }
             catch (OperationCanceledException)
             {
-                Application.Current.Dispatcher.Invoke(() => item.Status = RepoIndexStatus.Pending);
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    item.Status = RepoIndexStatus.Pending;
+                    NotifyRepoCommandStates();
+                });
             }
             catch (Exception ex)
             {
+                if (ct.IsCancellationRequested)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        item.Status = RepoIndexStatus.Pending;
+                        NotifyRepoCommandStates();
+                    });
+                    return;
+                }
+
                 _logger.Debug(ex.ToString());
                 _logger.Warn("Refresh repo failed {0}: {1}", item.DisplayName, ex.Message);
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     item.Status = RepoIndexStatus.Failed;
                     item.ErrorMessage = ex.Message;
+                    NotifyRepoCommandStates();
                 });
             }
         }
@@ -596,6 +671,8 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
         public void Dispose()
         {
+            _indexCts.Cancel();
+            _indexCts.Dispose();
             _downloadCts?.Cancel();
             _downloadCts?.Dispose();
             _api.Dispose();

@@ -2,6 +2,7 @@ using NLog;
 using SpineViewer.NetSource.Models;
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -181,7 +182,9 @@ namespace SpineViewer.NetSource.Services
             IProgress<long>? progress,
             CancellationToken ct = default)
         {
-            var encodedPath = string.Join('/', repoRelativePath.Split('/', StringSplitOptions.None));
+            var encodedPath = string.Join('/', repoRelativePath
+                .Split('/', StringSplitOptions.None)
+                .Select(Uri.EscapeDataString));
 
             var url = $"{RawBase}/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(name)}/{Uri.EscapeDataString(commitSha)}/{encodedPath}";
 

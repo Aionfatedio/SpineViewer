@@ -12,6 +12,8 @@ using System.Threading.Tasks;
 
 namespace SpineViewer.NetSource.Services
 {
+    public record RepoIndexProgress(int Done, int Total);
+
     public class RepoIndexService
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -88,7 +90,11 @@ namespace SpineViewer.NetSource.Services
             }
         }
 
-        public async Task<RepoIndexCache> RefreshAsync(RepoSourceConfig config, bool forceFull, CancellationToken ct)
+        public async Task<RepoIndexCache> RefreshAsync(
+            RepoSourceConfig config,
+            bool forceFull,
+            CancellationToken ct,
+            IProgress<RepoIndexProgress>? progress = null)
         {
             var repoInfo = await _api.GetRepoAsync(config.Owner, config.Name, ct);
             if (string.IsNullOrWhiteSpace(config.Branch))
@@ -117,9 +123,18 @@ namespace SpineViewer.NetSource.Services
                     }
                 }
 
-                if (cached.Bundles.Any(b => string.IsNullOrEmpty(b.CommitSha)))
+                if (_api.HasToken
+                    && (!cached.CommitMetadataResolved || cached.Bundles.Any(b => string.IsNullOrEmpty(b.CommitSha))))
                 {
-                    await ResolveBundleCommitsAsync(cached.Bundles, config.Owner, config.Name, headSha, finalDate, ct);
+                    cached.CommitMetadataResolved = await ResolveBundleCommitsAsync(
+                        cached.Bundles,
+                        config.Owner,
+                        config.Name,
+                        headSha,
+                        finalDate,
+                        forceAll: !cached.CommitMetadataResolved,
+                        ct,
+                        progress);
                     dirty = true;
                 }
 
@@ -132,7 +147,15 @@ namespace SpineViewer.NetSource.Services
 
             var bundles = AggregateBundles(config.RepoId, trees);
 
-            await ResolveBundleCommitsAsync(bundles, config.Owner, config.Name, headSha, finalDate, ct);
+            var commitMetadataResolved = await ResolveBundleCommitsAsync(
+                bundles,
+                config.Owner,
+                config.Name,
+                headSha,
+                finalDate,
+                forceAll: false,
+                ct,
+                progress);
 
             var newCache = new RepoIndexCache
             {
@@ -145,6 +168,7 @@ namespace SpineViewer.NetSource.Services
                 HeadCommit = headSha,
                 HeadCommitDate = finalDate?.ToString("o") ?? string.Empty,
                 IndexedAt = DateTime.UtcNow.ToString("o"),
+                CommitMetadataResolved = commitMetadataResolved,
                 Bundles = bundles,
                 Truncated = trees.Truncated
             };
@@ -152,29 +176,37 @@ namespace SpineViewer.NetSource.Services
             return newCache;
         }
 
-        private async Task ResolveBundleCommitsAsync(
+        private async Task<bool> ResolveBundleCommitsAsync(
             List<SpineBundle> bundles,
             string owner,
             string name,
             string headSha,
             DateTime? fallbackDate,
-            CancellationToken ct)
+            bool forceAll,
+            CancellationToken ct,
+            IProgress<RepoIndexProgress>? progress)
         {
-            var pending = bundles.Where(b => string.IsNullOrEmpty(b.CommitSha) && !string.IsNullOrEmpty(b.SkelPath)).ToList();
-            if (pending.Count == 0) return;
+            var pending = bundles
+                .Where(b => (forceAll || string.IsNullOrEmpty(b.CommitSha)) && !string.IsNullOrEmpty(b.SkelPath))
+                .ToList();
+            if (pending.Count == 0) return _api.HasToken;
 
             var fallbackIso = fallbackDate?.ToString("o") ?? string.Empty;
+            progress?.Report(new RepoIndexProgress(0, pending.Count));
 
             if (!_api.HasToken)
             {
-                foreach (var b in pending)
-                {
-                    b.CommitSha = headSha;
-                    b.CommitDate = fallbackIso;
-                }
-                return;
+                progress?.Report(new RepoIndexProgress(pending.Count, pending.Count));
+                return false;
             }
 
+            foreach (var b in pending)
+            {
+                b.CommitSha = null;
+                b.CommitDate = null;
+            }
+
+            bool allBatchesSucceeded = true;
             for (int start = 0; start < pending.Count; start += GraphQLBatchSize)
             {
                 ct.ThrowIfCancellationRequested();
@@ -184,7 +216,8 @@ namespace SpineViewer.NetSource.Services
                 try
                 {
                     var body = await _api.PostGraphQLAsync(query, ct);
-                    ApplyGraphQLBatch(body, batch);
+                    if (!ApplyGraphQLBatch(body, batch))
+                        allBatchesSucceeded = false;
                 }
                 catch (OperationCanceledException)
                 {
@@ -192,10 +225,13 @@ namespace SpineViewer.NetSource.Services
                 }
                 catch (Exception ex)
                 {
+                    allBatchesSucceeded = false;
                     _logger.Debug(ex.ToString());
                     _logger.Warn("GraphQL batch failed for [{0}..{1}] in {2}/{3}: {4}",
                         start, start + batch.Count, owner, name, ex.Message);
                 }
+
+                progress?.Report(new RepoIndexProgress(Math.Min(start + batch.Count, pending.Count), pending.Count));
             }
 
             foreach (var b in pending)
@@ -206,6 +242,8 @@ namespace SpineViewer.NetSource.Services
                     b.CommitDate = fallbackIso;
                 }
             }
+
+            return allBatchesSucceeded;
         }
 
         private static string BuildGraphQLBatchQuery(string owner, string name, string headSha, List<SpineBundle> batch)
@@ -225,12 +263,16 @@ namespace SpineViewer.NetSource.Services
             return sb.ToString();
         }
 
-        private static void ApplyGraphQLBatch(string body, List<SpineBundle> batch)
+        private static bool ApplyGraphQLBatch(string body, List<SpineBundle> batch)
         {
             using var doc = JsonDocument.Parse(body);
-            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object) return;
-            if (!data.TryGetProperty("repository", out var repo) || repo.ValueKind != JsonValueKind.Object) return;
-            if (!repo.TryGetProperty("object", out var obj) || obj.ValueKind != JsonValueKind.Object) return;
+            if (doc.RootElement.TryGetProperty("errors", out var errors)
+                && errors.ValueKind == JsonValueKind.Array
+                && errors.GetArrayLength() > 0)
+                return false;
+            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object) return false;
+            if (!data.TryGetProperty("repository", out var repo) || repo.ValueKind != JsonValueKind.Object) return false;
+            if (!repo.TryGetProperty("object", out var obj) || obj.ValueKind != JsonValueKind.Object) return false;
 
             foreach (var prop in obj.EnumerateObject())
             {
@@ -255,6 +297,8 @@ namespace SpineViewer.NetSource.Services
                     bundle.CommitDate = date;
                 }
             }
+
+            return batch.All(b => !string.IsNullOrEmpty(b.CommitSha));
         }
 
         private static string EscapeGraphQLString(string s)

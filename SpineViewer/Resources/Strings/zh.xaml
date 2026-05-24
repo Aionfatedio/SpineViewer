@@ -269,13 +269,13 @@
     <s:String x:Key="Str_AssociateFileSuffix">关联文件后缀</s:String>
 
     <!-- 网络加载 -->
-    <s:String x:Key="Str_NetSourceDialogTitle">从 GitHub 仓库载入 Spine 模型</s:String>
+    <s:String x:Key="Str_NetSourceDialogTitle">从 GitHub 仓库导入 Spine 模型</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlPlaceholder">输入 GitHub 仓库地址</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlTooltip">支持格式: https://github.com/owner/repo、https://github.com/owner/repo/tree/branch、owner/repo</s:String>
     <s:String x:Key="Str_NetSourceAddRepoTooltip">添加仓库</s:String>
     <s:String x:Key="Str_NetSourceRefreshAllTooltip">全部刷新</s:String>
     <s:String x:Key="Str_NetSourceBundlesSuffix"> 个模型</s:String>
-    <s:String x:Key="Str_NetSourceTruncatedWarning">⚠ 仓库文件数超过 GitHub API 上限, 索引仅含已抓取部分</s:String>
+    <s:String x:Key="Str_NetSourceTruncatedWarning">⚠ 仓库文件数超过 GitHub API 上限, 结果部分缺失</s:String>
     <s:String x:Key="Str_NetSourceRefreshRepo">刷新</s:String>
     <s:String x:Key="Str_NetSourceRemoveRepo">移除仓库</s:String>
     <s:String x:Key="Str_NetSourceMoveUp">上移</s:String>

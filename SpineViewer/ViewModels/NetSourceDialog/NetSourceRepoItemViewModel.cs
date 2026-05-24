@@ -37,7 +37,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         public string StatusText => _status switch
         {
             RepoIndexStatus.Pending => "等待刷新",
-            RepoIndexStatus.Indexing => "正在索引",
+            RepoIndexStatus.Indexing => IndexTotal > 0 ? $"正在索引 {IndexDone}/{IndexTotal}" : "正在索引",
             RepoIndexStatus.Ready => "已就绪",
             RepoIndexStatus.Stale => "可用 (有更新)",
             RepoIndexStatus.Failed => "失败",
@@ -45,6 +45,28 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         };
 
         public bool IsBusy => _status == RepoIndexStatus.Indexing;
+
+        public int IndexDone
+        {
+            get => _indexDone;
+            set
+            {
+                if (SetProperty(ref _indexDone, value))
+                    OnPropertyChanged(nameof(StatusText));
+            }
+        }
+        private int _indexDone;
+
+        public int IndexTotal
+        {
+            get => _indexTotal;
+            set
+            {
+                if (SetProperty(ref _indexTotal, value))
+                    OnPropertyChanged(nameof(StatusText));
+            }
+        }
+        private int _indexTotal;
 
         public string? HeadCommit
         {
