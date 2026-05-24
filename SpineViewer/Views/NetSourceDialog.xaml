@@ -1,0 +1,284 @@
+<Window x:Class="SpineViewer.Views.NetSourceDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:hc="https://handyorg.github.io/handycontrol"
+        xmlns:vmnet="clr-namespace:SpineViewer.ViewModels.NetSourceDialog"
+        d:DataContext="{d:DesignInstance Type=vmnet:NetSourceDialogViewModel}"
+        mc:Ignorable="d"
+        Title="{DynamicResource Str_NetSourceDialogTitle}"
+        Background="{DynamicResource RegionBrush}"
+        Width="900"
+        Height="600"
+        MinWidth="700"
+        MinHeight="450"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Loaded="NetSourceDialog_Loaded"
+        Closing="NetSourceDialog_Closing">
+    <DockPanel>
+
+        <Border DockPanel.Dock="Bottom">
+            <WrapPanel HorizontalAlignment="Center">
+                <WrapPanel.Resources>
+                    <Style TargetType="{x:Type Button}" BasedOn="{StaticResource ButtonDefault}">
+                        <Setter Property="Margin" Value="5"/>
+                        <Setter Property="Width" Value="140"/>
+                    </Style>
+                </WrapPanel.Resources>
+                <Button Content="{DynamicResource Str_NetSourceDownloadAndImport}" Click="ButtonDownload_Click"/>
+                <Button Content="{DynamicResource Str_NetSourceClose}" Click="ButtonClose_Click"/>
+            </WrapPanel>
+        </Border>
+
+        <StatusBar DockPanel.Dock="Bottom">
+            <StatusBarItem>
+                <TextBlock Foreground="{DynamicResource PrimaryTextBrush}" Text="{Binding StatusText}"/>
+            </StatusBarItem>
+        </StatusBar>
+
+        <Grid Margin="5">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" MinWidth="240"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="3*" MinWidth="320"/>
+            </Grid.ColumnDefinitions>
+
+            <DockPanel Grid.Column="0" Margin="0 0 4 0">
+
+                <Grid DockPanel.Dock="Top" Margin="0 0 0 5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <hc:TextBox hc:InfoElement.Placeholder="{DynamicResource Str_NetSourceRepoUrlPlaceholder}"
+                                Text="{Binding NewRepoInput, UpdateSourceTrigger=PropertyChanged}"
+                                ToolTip="{DynamicResource Str_NetSourceRepoUrlTooltip}">
+                        <hc:TextBox.InputBindings>
+                            <KeyBinding Gesture="Enter" Command="{Binding Cmd_AddRepo}"/>
+                        </hc:TextBox.InputBindings>
+                    </hc:TextBox>
+                    <Button Grid.Column="1"
+                            Margin="3 0 0 0"
+                            Padding="6 0"
+                            hc:IconElement.Geometry="{StaticResource Geo_NetSourceAdd}"
+                            hc:IconElement.Width="14"
+                            hc:IconElement.Height="14"
+                            Command="{Binding Cmd_AddRepo}"
+                            ToolTip="{DynamicResource Str_NetSourceAddRepoTooltip}"/>
+                    <Button Grid.Column="2"
+                            Margin="3 0 0 0"
+                            Padding="6 0"
+                            hc:IconElement.Geometry="{StaticResource Geo_NetSourceRefresh}"
+                            hc:IconElement.Width="14"
+                            hc:IconElement.Height="14"
+                            Command="{Binding Cmd_RefreshAll}"
+                            ToolTip="{DynamicResource Str_NetSourceRefreshAllTooltip}"/>
+                </Grid>
+
+                <ListBox x:Name="_repoListBox"
+                         ItemsSource="{Binding Repos}"
+                         SelectedItem="{Binding SelectedRepo}"
+                         AllowDrop="True"
+                         PreviewMouseLeftButtonDown="RepoListBox_PreviewMouseLeftButtonDown"
+                         MouseMove="RepoListBox_MouseMove"
+                         MouseLeftButtonUp="RepoListBox_MouseLeftButtonUp"
+                         DragEnter="RepoListBox_DragEnter"
+                         Drop="RepoListBox_Drop">
+
+                    <ListBox.InputBindings>
+                        <KeyBinding Gesture="Delete"
+                                    Command="{Binding Cmd_RemoveRepo}"
+                                    CommandParameter="{Binding SelectedItem, ElementName=_repoListBox}"/>
+                        <KeyBinding Gesture="Ctrl+R"
+                                    Command="{Binding Cmd_RefreshRepo}"
+                                    CommandParameter="{Binding SelectedItem, ElementName=_repoListBox}"/>
+                        <KeyBinding Gesture="Alt+W"
+                                    Command="{Binding Cmd_MoveUpRepo}"
+                                    CommandParameter="{Binding SelectedItem, ElementName=_repoListBox}"/>
+                        <KeyBinding Gesture="Alt+S"
+                                    Command="{Binding Cmd_MoveDownRepo}"
+                                    CommandParameter="{Binding SelectedItem, ElementName=_repoListBox}"/>
+                    </ListBox.InputBindings>
+
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="2">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding StatusText}" Opacity="0.75" FontSize="11"/>
+                                    <TextBlock FontSize="11" Opacity="0.6">
+                                        <Run Text="{Binding BundleCount, Mode=OneWay}"/>
+                                        <Run Text="{DynamicResource Str_NetSourceBundlesSuffix}"/>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding HeadCommitDateDisplay}"
+                                               FontSize="11"
+                                               Opacity="0.6"
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HeadCommitDateDisplay}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding HeadCommitDateDisplay}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding ErrorMessage}"
+                                               TextWrapping="Wrap"
+                                               FontSize="11"
+                                               Foreground="OrangeRed">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ErrorMessage}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ErrorMessage}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{DynamicResource Str_NetSourceTruncatedWarning}"
+                                               TextWrapping="Wrap"
+                                               FontSize="11"
+                                               Foreground="OrangeRed"
+                                               Visibility="{Binding Truncated, Converter={StaticResource Boolean2VisibilityConverter}}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+
+                    <ListBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="{DynamicResource Str_NetSourceRefreshRepo}"
+                                      InputGestureText="Ctrl+R"
+                                      Command="{Binding Cmd_RefreshRepo}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                            <MenuItem Header="{DynamicResource Str_NetSourceMoveUp}"
+                                      InputGestureText="Alt+W"
+                                      Command="{Binding Cmd_MoveUpRepo}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                            <MenuItem Header="{DynamicResource Str_NetSourceMoveDown}"
+                                      InputGestureText="Alt+S"
+                                      Command="{Binding Cmd_MoveDownRepo}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                            <MenuItem Header="{DynamicResource Str_NetSourceVisitRepo}"
+                                      Command="{Binding Cmd_VisitRepoUrl}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                            <MenuItem Header="{DynamicResource Str_NetSourceRemoveRepo}"
+                                      InputGestureText="Delete"
+                                      Command="{Binding Cmd_RemoveRepo}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
+                </ListBox>
+
+            </DockPanel>
+
+            <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns" HorizontalAlignment="Stretch"/>
+
+            <DockPanel Grid.Column="2" Margin="4 0 0 0">
+
+                <Grid DockPanel.Dock="Top" Margin="0 0 0 5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <hc:TextBox hc:InfoElement.Placeholder="{DynamicResource Str_NetSourceSearchPlaceholder}"
+                                Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged, Delay=200}"/>
+                    <ToggleButton Grid.Column="1"
+                                  Margin="3 0 0 0"
+                                  Padding="8 0"
+                                  Content="{DynamicResource Str_NetSourceAggregate}"
+                                  IsChecked="{Binding AggregateSearch}"
+                                  ToolTip="{DynamicResource Str_NetSourceAggregateTooltip}"/>
+                </Grid>
+
+                <ListView x:Name="_resultsListView"
+                          ItemsSource="{Binding SearchResults}"
+                          SelectionMode="Extended"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          GridViewColumnHeader.Click="ResultsListView_HeaderClick"
+                          MouseDoubleClick="ResultsListView_MouseDoubleClick">
+                    <ListView.InputBindings>
+                        <KeyBinding Gesture="Ctrl+S"
+                                    Command="{Binding Cmd_SaveAs}"
+                                    CommandParameter="{Binding SelectedItems, ElementName=_resultsListView}"/>
+                    </ListView.InputBindings>
+
+                    <ListView.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="{DynamicResource Str_NetSourceSaveAs}"
+                                      InputGestureText="Ctrl+S"
+                                      Command="{Binding Cmd_SaveAs}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                        </ContextMenu>
+                    </ListView.ContextMenu>
+                    <ListView.View>
+                        <GridView x:Name="_resultsGridView">
+                            <GridViewColumn Header="{DynamicResource Str_NetSourceColModel}"
+                                            DisplayMemberBinding="{Binding ModelName}"
+                                            Width="180"/>
+                            <GridViewColumn Header="{DynamicResource Str_NetSourceColDir}"
+                                            DisplayMemberBinding="{Binding BundleDir}"
+                                            Width="220"/>
+                            <GridViewColumn DisplayMemberBinding="{Binding RepoDisplayName}" Width="130">
+                                <GridViewColumn.Header>
+                                    <GridViewColumnHeader Content="{DynamicResource Str_NetSourceColRepo}"
+                                                          Tag="Repo"
+                                                          ToolTip="{DynamicResource Str_NetSourceHeaderSortRepoTooltip}"/>
+                                </GridViewColumn.Header>
+                            </GridViewColumn>
+                            <GridViewColumn DisplayMemberBinding="{Binding TotalSizeDisplay}" Width="80">
+                                <GridViewColumn.Header>
+                                    <GridViewColumnHeader Content="{DynamicResource Str_NetSourceColSize}"
+                                                          Tag="Size"
+                                                          ToolTip="{DynamicResource Str_NetSourceHeaderSortGenericTooltip}"/>
+                                </GridViewColumn.Header>
+                            </GridViewColumn>
+                            <GridViewColumn DisplayMemberBinding="{Binding FileCount}" Width="60">
+                                <GridViewColumn.Header>
+                                    <GridViewColumnHeader Content="{DynamicResource Str_NetSourceColFiles}"
+                                                          Tag="FileCount"
+                                                          ToolTip="{DynamicResource Str_NetSourceHeaderSortGenericTooltip}"/>
+                                </GridViewColumn.Header>
+                            </GridViewColumn>
+                            <GridViewColumn x:Name="_commitColumn"
+                                            DisplayMemberBinding="{Binding CommitShort}"
+                                            Width="70">
+                                <GridViewColumn.Header>
+                                    <GridViewColumnHeader Content="{DynamicResource Str_NetSourceColCommit}"
+                                                          Tag="CommitSha"/>
+                                </GridViewColumn.Header>
+                            </GridViewColumn>
+                            <GridViewColumn x:Name="_commitDateColumn"
+                                            DisplayMemberBinding="{Binding CommitDateDisplay}"
+                                            Width="120">
+                                <GridViewColumn.Header>
+                                    <GridViewColumnHeader Content="{DynamicResource Str_NetSourceColCommitTime}"
+                                                          Tag="CommitDate"
+                                                          ToolTip="{DynamicResource Str_NetSourceHeaderSortGenericTooltip}"/>
+                                </GridViewColumn.Header>
+                            </GridViewColumn>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+
+            </DockPanel>
+
+        </Grid>
+
+    </DockPanel>
+</Window>

@@ -1,6 +1,8 @@
 ﻿using Microsoft.Win32;
 using SpineViewer.Models;
 using SpineViewer.ViewModels.Exporters;
+using SpineViewer.ViewModels.MainWindow;
+using SpineViewer.ViewModels.NetSourceDialog;
 using SpineViewer.Views;
 using SpineViewer.Views.ExporterDialogs;
 using System;
@@ -64,6 +66,13 @@ namespace SpineViewer.Services
         public static bool ShowPreferenceDialog(PreferenceModel m)
         {
             var dialog = new PreferenceDialog() { DataContext = m, Owner = App.Current.MainWindow };
+            return dialog.ShowDialog() ?? false;
+        }
+
+        public static bool ShowNetSourceDialog(MainWindowViewModel vmMain)
+        {
+            var vm = new NetSourceDialogViewModel(vmMain);
+            var dialog = new NetSourceDialog() { DataContext = vm, Owner = App.Current.MainWindow };
             return dialog.ShowDialog() ?? false;
         }
 

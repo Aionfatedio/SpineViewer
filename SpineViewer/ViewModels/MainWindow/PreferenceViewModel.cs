@@ -5,6 +5,7 @@ using NLog;
 using Spine;
 using Spine.Implementations;
 using SpineViewer.Models;
+using SpineViewer.NetSource.Services;
 using SpineViewer.Services;
 using SpineViewer.Utils;
 using System;
@@ -120,6 +121,9 @@ namespace SpineViewer.ViewModels.MainWindow
                     AutoRun = AutoRun,
                     AutoRunWorkspaceConfigPath = AutoRunWorkspaceConfigPath,
                     AssociateFileSuffix = AssociateFileSuffix,
+
+                    NetSourceCacheRoot = NetSourceCacheRoot,
+                    GitHubAccessToken = GitHubAccessToken,
                 };
             }
             set
@@ -155,6 +159,10 @@ namespace SpineViewer.ViewModels.MainWindow
                 AutoRun = value.AutoRun;
                 AutoRunWorkspaceConfigPath = value.AutoRunWorkspaceConfigPath;
                 AssociateFileSuffix = value.AssociateFileSuffix;
+
+                NetSourceCacheRoot = value.NetSourceCacheRoot;
+                if (value.GitHubAccessToken is not null)
+                    GitHubAccessToken = value.GitHubAccessToken;
             }
         }
 
@@ -338,6 +346,32 @@ namespace SpineViewer.ViewModels.MainWindow
         {
             get => ((App)App.Current).AssociateFileSuffix;
             set => SetProperty(((App)App.Current).AssociateFileSuffix, value, v => ((App)App.Current).AssociateFileSuffix = v);
+        }
+
+        #endregion
+
+        #region 网络加载首选项
+
+        public string? NetSourceCacheRoot
+        {
+            get => _netSourceCacheRoot;
+            set => SetProperty(ref _netSourceCacheRoot, string.IsNullOrWhiteSpace(value) ? null : value);
+        }
+        private string? _netSourceCacheRoot;
+
+        public string? GitHubAccessToken
+        {
+            get
+            {
+                var cacheRoot = NetSourcePathProvider.ResolveCacheRoot(NetSourceCacheRoot);
+                return new NetSourceCredentialStore(cacheRoot).GetGitHubToken();
+            }
+            set
+            {
+                var cacheRoot = NetSourcePathProvider.ResolveCacheRoot(NetSourceCacheRoot);
+                new NetSourceCredentialStore(cacheRoot).SetGitHubToken(string.IsNullOrWhiteSpace(value) ? null : value);
+                OnPropertyChanged();
+            }
         }
 
         #endregion

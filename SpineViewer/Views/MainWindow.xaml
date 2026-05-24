@@ -903,17 +903,38 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <hc:TextBox hc:InfoElement.Placeholder="{DynamicResource Str_Filter}"
                                                         Text="{Binding FilterString, UpdateSourceTrigger=PropertyChanged}"/>
-                                            <Button Grid.Column="1" 
-                                                    hc:IconElement.Geometry="{StaticResource Geo_Folder}" 
+                                            <Button Grid.Column="1"
+                                                    hc:IconElement.Geometry="{StaticResource Geo_Folder}"
+                                                    hc:IconElement.Width="14"
+                                                    hc:IconElement.Height="14"
                                                     Command="{Binding Cmd_ChangeCurrentDirectory}"
                                                     ToolTip="{DynamicResource Str_ChangeCurrentDirectoryTooltip}"/>
-                                            <Button Grid.Column="2" 
-                                                    hc:IconElement.Geometry="{StaticResource Geo_ArrowRotateRight}" 
+                                            <Button Grid.Column="2"
+                                                    hc:IconElement.Geometry="{StaticResource Geo_ArrowRotateRight}"
+                                                    hc:IconElement.Width="14"
+                                                    hc:IconElement.Height="14"
                                                     Command="{Binding Cmd_RefreshItems}"
                                                     ToolTip="{DynamicResource Str_RefreshItemsTooltip}"/>
+                                            <Button Grid.Column="3"
+                                                    Padding="6 0"
+                                                    Command="{Binding Cmd_OpenNetSourceDialog}"
+                                                    ToolTip="{DynamicResource Str_NetSourceTooltip}">
+                                                <Viewbox Stretch="Uniform" Width="18" Height="18" UseLayoutRounding="True">
+                                                    <Canvas Width="48" Height="48">
+                                                        <Path Data="{StaticResource Geo_CloudDownload}"
+                                                              Stroke="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource AncestorType=Button}}"
+                                                              StrokeThickness="4"
+                                                              StrokeStartLineCap="Round"
+                                                              StrokeEndLineCap="Round"
+                                                              StrokeLineJoin="Round"
+                                                              Fill="Transparent"/>
+                                                    </Canvas>
+                                                </Viewbox>
+                                            </Button>
                                         </Grid>
 
                                         <StatusBar DockPanel.Dock="Bottom">

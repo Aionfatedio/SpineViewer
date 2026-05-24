@@ -3,8 +3,10 @@ using CommunityToolkit.Mvvm.Input;
 using NLog;
 using SFMLRenderer;
 using SpineViewer.Models;
+using SpineViewer.NetSource.Models;
 using SpineViewer.Services;
 using SpineViewer.Utils;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Shell;
@@ -205,6 +207,17 @@ namespace SpineViewer.ViewModels.MainWindow
                 _sfmlRendererViewModel.WorkspaceConfig = value.RendererConfig;
                 _spineObjectListViewModel.LoadedSpineObjects = value.LoadedSpineObjects;
             }
+        }
+
+        public List<RepoSourceConfig> NetSourceRepoConfigs { get; set; } = [];
+
+        public bool NetSourceAggregateSearch { get; set; } = true;
+
+        public event System.Action? UserStateSaveRequested;
+
+        public void SaveNetSourceRepoConfigs()
+        {
+            UserStateSaveRequested?.Invoke();
         }
     }
 }

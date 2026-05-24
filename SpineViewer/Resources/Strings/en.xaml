@@ -29,6 +29,7 @@
     <s:String x:Key="Str_Filter">Filter</s:String>
     <s:String x:Key="Str_ChangeCurrentDirectoryTooltip">Open Directory</s:String>
     <s:String x:Key="Str_RefreshItemsTooltip">Refresh Items</s:String>
+    <s:String x:Key="Str_NetSourceTooltip">Load from Network</s:String>
     <s:String x:Key="Str_FileDirectory">File Directory</s:String>
     <s:String x:Key="Str_FileName">File Name</s:String>
     <s:String x:Key="Str_AddSelectedItems">Import Selected Items</s:String>
@@ -266,5 +267,41 @@
     <s:String x:Key="Str_AutoRunWorkspaceConfigPath">Auto-load Workspace File on Startup</s:String>
     <s:String x:Key="Str_AutoRunWorkspaceConfigPathTooltip">Specifies the workspace configuration file to be automatically loaded when the program starts with Windows startup. This takes effect only if auto-startup is enabled.</s:String>
     <s:String x:Key="Str_AssociateFileSuffix">Associate File Extension</s:String>
+
+    <!-- 网络加载 -->
+    <s:String x:Key="Str_NetSourceDialogTitle">Network Loader - Search and Download Spine Models from GitHub Repositories</s:String>
+    <s:String x:Key="Str_NetSourceRepoUrlPlaceholder">Enter GitHub repo URL or owner/repo</s:String>
+    <s:String x:Key="Str_NetSourceRepoUrlTooltip">Supported: https://github.com/owner/repo, https://github.com/owner/repo/tree/branch, owner/repo</s:String>
+    <s:String x:Key="Str_NetSourceAddRepoTooltip">Add repository (Enter also works)</s:String>
+    <s:String x:Key="Str_NetSourceRefreshAllTooltip">Refresh all repositories</s:String>
+    <s:String x:Key="Str_NetSourceBundlesSuffix"> models</s:String>
+    <s:String x:Key="Str_NetSourceTruncatedWarning">⚠ Repository exceeds GitHub API tree limit, index contains partial results only</s:String>
+    <s:String x:Key="Str_NetSourceRefreshRepo">Refresh</s:String>
+    <s:String x:Key="Str_NetSourceRemoveRepo">Remove Repository</s:String>
+    <s:String x:Key="Str_NetSourceMoveUp">Move Up (Higher Priority)</s:String>
+    <s:String x:Key="Str_NetSourceMoveDown">Move Down (Lower Priority)</s:String>
+    <s:String x:Key="Str_NetSourceVisitRepo">Open Repository URL</s:String>
+    <s:String x:Key="Str_NetSourceSearchPlaceholder">Search model name / directory path</s:String>
+    <s:String x:Key="Str_NetSourceAggregate">Aggregate</s:String>
+    <s:String x:Key="Str_NetSourceAggregateTooltip">When off, only search the currently selected repository</s:String>
+    <s:String x:Key="Str_NetSourceColModel">Model</s:String>
+    <s:String x:Key="Str_NetSourceColDir">Directory</s:String>
+    <s:String x:Key="Str_NetSourceColRepo">Repository</s:String>
+    <s:String x:Key="Str_NetSourceColSize">Size</s:String>
+    <s:String x:Key="Str_NetSourceColFiles">Files</s:String>
+    <s:String x:Key="Str_NetSourceColCommit">Commit</s:String>
+    <s:String x:Key="Str_NetSourceColCommitTime">Committed</s:String>
+    <s:String x:Key="Str_NetSourceHeaderSortRepoTooltip">Click to sort by repo priority (click again to invert). Any new search/filter clears the sort.</s:String>
+    <s:String x:Key="Str_NetSourceHeaderSortGenericTooltip">Click to sort by this column (click again to invert). Any new search/filter clears the sort.</s:String>
+    <s:String x:Key="Str_NetSourceDownloadAndImport">Download &amp; Import</s:String>
+    <s:String x:Key="Str_NetSourceSaveAs">Save As</s:String>
+    <s:String x:Key="Str_NetSourceClose">Close</s:String>
+    <s:String x:Key="Str_NetSourcePreference">Network Loader Options</s:String>
+    <s:String x:Key="Str_NetSourceCacheRoot">Cache Directory</s:String>
+    <s:String x:Key="Str_NetSourceCacheRootTooltip">Root directory for index, downloaded files and encrypted credentials. Defaults to a "netcache" folder next to the program.</s:String>
+    <s:String x:Key="Str_NetSourceCacheRootReset">Reset</s:String>
+    <s:String x:Key="Str_NetSourceCacheRootHint">Leave empty to use default (program directory\netcache)</s:String>
+    <s:String x:Key="Str_NetSourceGitHubToken">GitHub Access Token</s:String>
+    <s:String x:Key="Str_NetSourceGitHubTokenTooltip">Optional, raises GitHub API rate limit (60/h anonymous → 5000/h authenticated). Stored encrypted via DPAPI and never written to preference.json.</s:String>
 
 </ResourceDictionary>

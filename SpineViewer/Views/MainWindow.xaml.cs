@@ -121,6 +121,8 @@ public partial class MainWindow : Window
         _vm.SFMLRendererViewModel.RequestSelectionChanging += SpinesListView_RequestSelectionChanging;
 
         _vm.SFMLRendererViewModel.PropertyChanged += SFMLRendererViewModel_PropertyChanged;
+
+        _vm.UserStateSaveRequested += DelayedSaveUserState;
     }
 
     /// <summary>
@@ -273,6 +275,9 @@ public partial class MainWindow : Window
 
             _vm.ExplorerListViewModel.CurrentDirectory = m.ExploringDirectory;
 
+            _vm.NetSourceRepoConfigs = m.NetSourceRepoConfigs ?? [];
+            _vm.NetSourceAggregateSearch = m.NetSourceAggregateSearch;
+
             _vm.SFMLRendererViewModel.SetResolution(m.ResolutionX, m.ResolutionY);
             _vm.SFMLRendererViewModel.Speed = m.Speed;
             _vm.SFMLRendererViewModel.ShowAxis = m.ShowAxis;
@@ -306,6 +311,9 @@ public partial class MainWindow : Window
             RightPanelGridRow2Height = _rightPanelGrid.RowDefinitions[2].Height.Value,
 
             ExploringDirectory = _vm.ExplorerListViewModel.CurrentDirectory,
+
+            NetSourceRepoConfigs = _vm.NetSourceRepoConfigs?.Count > 0 ? _vm.NetSourceRepoConfigs : null,
+            NetSourceAggregateSearch = _vm.NetSourceAggregateSearch,
 
             ResolutionX = _vm.SFMLRendererViewModel.ResolutionX,
             ResolutionY = _vm.SFMLRendererViewModel.ResolutionY,

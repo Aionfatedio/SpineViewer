@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows.Media;
 
@@ -122,6 +123,30 @@ namespace SpineViewer.Models
 
         [ObservableProperty]
         private bool _associateFileSuffix;
+
+        #endregion
+
+        #region 网络加载首选项
+
+        [ObservableProperty]
+        private string? _netSourceCacheRoot;
+
+        [ObservableProperty]
+        [property: JsonIgnore]
+        private string? _gitHubAccessToken;
+
+        public RelayCommand Cmd_SelectNetSourceCacheRoot => _cmd_SelectNetSourceCacheRoot ??= new(() =>
+        {
+            if (DialogService.ShowOpenFolderDialog(out var folder) && !string.IsNullOrWhiteSpace(folder))
+                NetSourceCacheRoot = folder;
+        });
+        private RelayCommand? _cmd_SelectNetSourceCacheRoot;
+
+        public RelayCommand Cmd_ResetNetSourceCacheRoot => _cmd_ResetNetSourceCacheRoot ??= new(() =>
+        {
+            NetSourceCacheRoot = null;
+        });
+        private RelayCommand? _cmd_ResetNetSourceCacheRoot;
 
         #endregion
     }

@@ -324,6 +324,44 @@
                             </Grid>
                         </StackPanel>
                     </GroupBox>
+
+                    <GroupBox Header="{DynamicResource Str_NetSourcePreference}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="LabelCol"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Content="{DynamicResource Str_NetSourceCacheRoot}"
+                                       ToolTip="{DynamicResource Str_NetSourceCacheRootTooltip}"/>
+                                <DockPanel Grid.Column="1">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="{DynamicResource Str_NetSourceCacheRootReset}"
+                                            Margin="3 0 0 0"
+                                            Command="{Binding Cmd_ResetNetSourceCacheRoot}"/>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="..."
+                                            Margin="3 0 0 0"
+                                            Command="{Binding Cmd_SelectNetSourceCacheRoot}"/>
+                                    <TextBox Text="{Binding NetSourceCacheRoot, UpdateSourceTrigger=PropertyChanged}"
+                                             hc:InfoElement.Placeholder="{DynamicResource Str_NetSourceCacheRootHint}"
+                                             ToolTip="{DynamicResource Str_NetSourceCacheRootTooltip}"/>
+                                </DockPanel>
+                            </Grid>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="LabelCol"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Content="{DynamicResource Str_NetSourceGitHubToken}"
+                                       ToolTip="{DynamicResource Str_NetSourceGitHubTokenTooltip}"/>
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding GitHubAccessToken, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="{DynamicResource Str_NetSourceGitHubTokenTooltip}"/>
+                            </Grid>
+                        </StackPanel>
+                    </GroupBox>
                 </StackPanel>
             </ScrollViewer>
         </Border>

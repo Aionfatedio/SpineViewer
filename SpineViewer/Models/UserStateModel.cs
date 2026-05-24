@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SpineViewer.NetSource.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -36,6 +37,14 @@ namespace SpineViewer.Models
         #region 浏览页面状态
 
         public string? ExploringDirectory { get; set; }
+
+        #endregion
+
+        #region 网络加载状态
+
+        public List<RepoSourceConfig>? NetSourceRepoConfigs { get; set; }
+
+        public bool NetSourceAggregateSearch { get; set; } = true;
 
         #endregion
 

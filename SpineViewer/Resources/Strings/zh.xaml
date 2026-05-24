@@ -29,6 +29,7 @@
     <s:String x:Key="Str_Filter">筛选</s:String>
     <s:String x:Key="Str_ChangeCurrentDirectoryTooltip">打开目录</s:String>
     <s:String x:Key="Str_RefreshItemsTooltip">刷新列表项</s:String>
+    <s:String x:Key="Str_NetSourceTooltip">网络加载</s:String>
     <s:String x:Key="Str_FileDirectory">文件目录</s:String>
     <s:String x:Key="Str_FileName">文件名</s:String>
     <s:String x:Key="Str_AddSelectedItems">导入选中项</s:String>
@@ -266,5 +267,41 @@
     <s:String x:Key="Str_AutoRunWorkspaceConfigPath">自启动加载工作区文件</s:String>
     <s:String x:Key="Str_AutoRunWorkspaceConfigPathTooltip">设置程序开机自启后自动加载的工作区配置文件，仅在启用开机自启时生效</s:String>
     <s:String x:Key="Str_AssociateFileSuffix">关联文件后缀</s:String>
+
+    <!-- 网络加载 -->
+    <s:String x:Key="Str_NetSourceDialogTitle">从 GitHub 仓库载入 Spine 模型</s:String>
+    <s:String x:Key="Str_NetSourceRepoUrlPlaceholder">输入 GitHub 仓库地址</s:String>
+    <s:String x:Key="Str_NetSourceRepoUrlTooltip">支持格式: https://github.com/owner/repo、https://github.com/owner/repo/tree/branch、owner/repo</s:String>
+    <s:String x:Key="Str_NetSourceAddRepoTooltip">添加仓库</s:String>
+    <s:String x:Key="Str_NetSourceRefreshAllTooltip">全部刷新</s:String>
+    <s:String x:Key="Str_NetSourceBundlesSuffix"> 个模型</s:String>
+    <s:String x:Key="Str_NetSourceTruncatedWarning">⚠ 仓库文件数超过 GitHub API 上限, 索引仅含已抓取部分</s:String>
+    <s:String x:Key="Str_NetSourceRefreshRepo">刷新</s:String>
+    <s:String x:Key="Str_NetSourceRemoveRepo">移除仓库</s:String>
+    <s:String x:Key="Str_NetSourceMoveUp">上移</s:String>
+    <s:String x:Key="Str_NetSourceMoveDown">下移</s:String>
+    <s:String x:Key="Str_NetSourceVisitRepo">访问仓库地址</s:String>
+    <s:String x:Key="Str_NetSourceSearchPlaceholder">搜索模型名 / 目录路径</s:String>
+    <s:String x:Key="Str_NetSourceAggregate">聚合搜索</s:String>
+    <s:String x:Key="Str_NetSourceAggregateTooltip">关闭后仅搜索选中仓库</s:String>
+    <s:String x:Key="Str_NetSourceColModel">模型名</s:String>
+    <s:String x:Key="Str_NetSourceColDir">目录</s:String>
+    <s:String x:Key="Str_NetSourceColRepo">仓库</s:String>
+    <s:String x:Key="Str_NetSourceColSize">大小</s:String>
+    <s:String x:Key="Str_NetSourceColFiles">文件数</s:String>
+    <s:String x:Key="Str_NetSourceColCommit">提交</s:String>
+    <s:String x:Key="Str_NetSourceColCommitTime">提交时间</s:String>
+    <s:String x:Key="Str_NetSourceHeaderSortRepoTooltip">按仓库优先级排序</s:String>
+    <s:String x:Key="Str_NetSourceHeaderSortGenericTooltip">按此列排序</s:String>
+    <s:String x:Key="Str_NetSourceDownloadAndImport">导入选中模型</s:String>
+    <s:String x:Key="Str_NetSourceSaveAs">另存为</s:String>
+    <s:String x:Key="Str_NetSourceClose">关闭</s:String>
+    <s:String x:Key="Str_NetSourcePreference">网络加载选项</s:String>
+    <s:String x:Key="Str_NetSourceCacheRoot">缓存目录</s:String>
+    <s:String x:Key="Str_NetSourceCacheRootTooltip">索引、已下载文件、加密凭证的根目录</s:String>
+    <s:String x:Key="Str_NetSourceCacheRootReset">重置</s:String>
+    <s:String x:Key="Str_NetSourceCacheRootHint">留空使用默认 (程序目录/netcache)</s:String>
+    <s:String x:Key="Str_NetSourceGitHubToken">GitHub 访问令牌</s:String>
+    <s:String x:Key="Str_NetSourceGitHubTokenTooltip">可选, 提高 GitHub API 速率限制</s:String>
 
 </ResourceDictionary>
