@@ -739,7 +739,15 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             if (reqs.Count == 0)
             {
                 if (localSkelPaths.Count > 0)
-                    _vmMain.SpineObjectListViewModel.AddSpineObjectFromFileList(localSkelPaths);
+                {
+                    var loadSummary = _vmMain.SpineObjectListViewModel.AddSpineObjectFilesImmediately(localSkelPaths);
+                    if (loadSummary.Failed > 0)
+                        _logger.Warn("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded, {1} already loaded, {2} load failed",
+                            loadSummary.Loaded, loadSummary.Reused, loadSummary.Failed);
+                    else
+                        _logger.Info("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded, {1} already loaded",
+                            loadSummary.Loaded, loadSummary.Reused);
+                }
                 return;
             }
 
@@ -807,19 +815,22 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
             _vmMain.ProgressState = TaskbarItemProgressState.None;
 
+            SpineObjectLoadSummary loadSummary = default;
             if (downloadedSkelPaths.Count > 0)
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    _vmMain.SpineObjectListViewModel.AddSpineObjectFromFileList(downloadedSkelPaths);
+                    loadSummary = _vmMain.SpineObjectListViewModel.AddSpineObjectFilesImmediately(downloadedSkelPaths);
                     RefreshSearch();
                 });
             }
 
-            if (failedBundle > 0)
-                _logger.Warn("GitHub repo download finished: {0} success, {1} failed", successBundle, failedBundle);
+            if (failedBundle > 0 || loadSummary.Failed > 0)
+                _logger.Warn("GitHub repo import finished: {0} bundle(s) downloaded, {1} download failed, {2} loaded, {3} already loaded, {4} load failed",
+                    successBundle, failedBundle, loadSummary.Loaded, loadSummary.Reused, loadSummary.Failed);
             else
-                _logger.Info("GitHub repo download finished: {0} bundle(s) imported", successBundle);
+                _logger.Info("GitHub repo import finished: {0} bundle(s) downloaded, {1} loaded, {2} already loaded",
+                    successBundle, loadSummary.Loaded, loadSummary.Reused);
         }
 
         #endregion

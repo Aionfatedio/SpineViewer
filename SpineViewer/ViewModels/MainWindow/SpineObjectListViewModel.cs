@@ -21,6 +21,18 @@ using System.Windows.Shell;
 
 namespace SpineViewer.ViewModels.MainWindow
 {
+    public readonly record struct SpineObjectLoadSummary(int Loaded, int Reused, int Failed, int Skipped)
+    {
+        public int Successful => Loaded + Reused;
+    }
+
+    internal enum SpineObjectLoadStatus
+    {
+        Failed,
+        Loaded,
+        Reused
+    }
+
     public class SpineObjectListViewModel : ObservableObject
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -114,6 +126,56 @@ namespace SpineViewer.ViewModels.MainWindow
         /// <param name="paths">可以是文件和文件夹</param>
         public void AddSpineObjectFromFileList(IEnumerable<string> paths)
         {
+            var validPaths = CollectValidSpinePaths(paths);
+
+            if (validPaths.Count > 1)
+            {
+                if (validPaths.Count > 100)
+                {
+                    if (!MessagePopupService.OKCancel(string.Format(AppResource.Str_TooManyItemsToAddQuest, validPaths.Count)))
+                        return;
+                }
+                ProgressService.RunAsync((pr, ct) => AddSpineObjectsTask(
+                    validPaths.ToArray(), pr, ct),
+                    AppResource.Str_AddSpineObjectsTitle
+                );
+            }
+            else if (validPaths.Count > 0)
+            {
+                AddSpineObjectFilesImmediately(validPaths);
+                _logger.LogCurrentProcessMemoryUsage();
+            }
+        }
+
+        public SpineObjectLoadSummary AddSpineObjectFilesImmediately(IEnumerable<string> paths)
+        {
+            var validPaths = CollectValidSpinePaths(paths);
+            int loaded = 0;
+            int reused = 0;
+            int failed = 0;
+
+            foreach (var skelPath in validPaths)
+            {
+                switch (InsertSpineObject(skelPath))
+                {
+                    case SpineObjectLoadStatus.Loaded:
+                        loaded++;
+                        break;
+                    case SpineObjectLoadStatus.Reused:
+                        reused++;
+                        break;
+                    default:
+                        failed++;
+                        break;
+                }
+            }
+
+            _logger.LogCurrentProcessMemoryUsage();
+            return new SpineObjectLoadSummary(loaded, reused, failed, 0);
+        }
+
+        private static List<string> CollectValidSpinePaths(IEnumerable<string> paths)
+        {
             List<string> validPaths = [];
             foreach (var path in paths)
             {
@@ -134,23 +196,7 @@ namespace SpineViewer.ViewModels.MainWindow
                 }
             }
 
-            if (validPaths.Count > 1)
-            {
-                if (validPaths.Count > 100)
-                {
-                    if (!MessagePopupService.OKCancel(string.Format(AppResource.Str_TooManyItemsToAddQuest, validPaths.Count)))
-                        return;
-                }
-                ProgressService.RunAsync((pr, ct) => AddSpineObjectsTask(
-                    validPaths.ToArray(), pr, ct),
-                    AppResource.Str_AddSpineObjectsTitle
-                );
-            }
-            else if (validPaths.Count > 0)
-            {
-                InsertSpineObject(validPaths[0]);
-                _logger.LogCurrentProcessMemoryUsage();
-            }
+            return validPaths;
         }
 
         public bool TrySelectLoadedSpineObject(string skelPath, string? atlasPath = null)
@@ -225,7 +271,8 @@ namespace SpineViewer.ViewModels.MainWindow
                 var skelPath = paths[i];
                 reporter.ProgressText = $"[{i}/{totalCount}] {skelPath}";
 
-                if (InsertSpineObject(skelPath))
+                var status = InsertSpineObject(skelPath);
+                if (status is SpineObjectLoadStatus.Loaded or SpineObjectLoadStatus.Reused)
                     success++;
                 else
                     error++;
@@ -248,24 +295,28 @@ namespace SpineViewer.ViewModels.MainWindow
         /// 安全地在列表头添加一个模型, 发生错误会输出日志
         /// </summary>
         /// <returns>是否添加成功</returns>
-        private bool InsertSpineObject(string skelPath, string? atlasPath = null)
+        private SpineObjectLoadStatus InsertSpineObject(string skelPath, string? atlasPath = null)
         {
             try
             {
                 if (TrySelectLoadedSpineObject(skelPath, atlasPath))
-                    return true;
+                {
+                    _logger.Info("Spine already loaded, selected existing: {0}", skelPath);
+                    return SpineObjectLoadStatus.Reused;
+                }
 
                 var sp = new SpineObjectModel(skelPath, atlasPath);
                 lock (_spineObjectModels.Lock) _spineObjectModels.Insert(0, sp);
                 SelectSpineObject(sp);
-                return true;
+                _logger.Info("Loaded spine: {0}", sp.SkelPath);
+                return SpineObjectLoadStatus.Loaded;
             }
             catch (Exception ex)
             {
                 _logger.Debug(ex.ToString());
                 _logger.Error("Failed to load: {0}, {1}", skelPath, ex.Message);
             }
-            return false;
+            return SpineObjectLoadStatus.Failed;
         }
 
         private void SelectSpineObject(SpineObjectModel sp)

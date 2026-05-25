@@ -30,6 +30,14 @@ namespace SpineViewer.NetSource.Services
             (".json", ".atlas")
         ];
 
+        private static readonly string[] _textureSuffixes =
+        [
+            ".png",
+            ".webp",
+            ".jpg",
+            ".jpeg"
+        ];
+
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
             WriteIndented = false,
@@ -340,7 +348,7 @@ namespace SpineViewer.NetSource.Services
                 || name.EndsWith(".atlas.txt")
                 || name.EndsWith(".atlas")
                 || name.EndsWith(".json")
-                || name.EndsWith(".png");
+                || IsTextureFileName(name);
         }
 
         private async Task<bool> ResolveBundleCommitsAsync(
@@ -510,9 +518,9 @@ namespace SpineViewer.NetSource.Services
 
                 var lowerName = GetFileName(path).ToLowerInvariant();
 
-                if (lowerName.EndsWith(".png"))
+                if (IsTextureFileName(lowerName))
                 {
-                    bucket.PngFiles.Add(entry);
+                    bucket.TextureFiles.Add(entry);
                 }
                 else if (lowerName.EndsWith(".skel.bytes"))
                 {
@@ -563,7 +571,7 @@ namespace SpineViewer.NetSource.Services
             var skelPath = skelEntry.Path!;
             var atlasSuffix = SkelToAtlasSuffix(skelSuffix);
             var atlasEntry = FindAtlasFor(skelPath, skelSuffix, atlasSuffix, bucket);
-            var pngFiles = bucket.PngFiles
+            var textureFiles = SelectTextureFiles(skelPath, atlasEntry, bucket.TextureFiles)
                 .Where(p => p.Path is not null)
                 .OrderBy(p => p.Path, StringComparer.Ordinal)
                 .ToList();
@@ -575,16 +583,133 @@ namespace SpineViewer.NetSource.Services
                 ModelName = StripSuffix(GetFileName(skelPath), skelSuffix),
                 SkelPath = skelPath,
                 AtlasPath = atlasEntry?.Path,
-                PngPaths = pngFiles.Select(p => p.Path!).ToList(),
-                BundleHash = BuildBundleHash(skelEntry, atlasEntry, pngFiles)
+                PngPaths = textureFiles.Select(p => p.Path!).ToList(),
+                BundleHash = BuildBundleHash(skelEntry, atlasEntry, textureFiles)
             };
             long total = skelEntry.Size ?? 0;
             int count = 1;
             if (atlasEntry is not null) { total += atlasEntry.Size ?? 0; count++; }
-            foreach (var png in pngFiles) { total += png.Size ?? 0; count++; }
+            foreach (var texture in textureFiles) { total += texture.Size ?? 0; count++; }
             bundle.TotalSize = total;
             bundle.FileCount = count;
             return bundle;
+        }
+
+        private static List<GitHubTreeEntry> SelectTextureFiles(
+            string skelPath,
+            GitHubTreeEntry? atlasEntry,
+            List<GitHubTreeEntry> textureFiles)
+        {
+            var validTextures = textureFiles
+                .Where(t => !string.IsNullOrEmpty(t.Path))
+                .ToList();
+            if (validTextures.Count <= 1)
+                return validTextures;
+
+            var groups = validTextures
+                .GroupBy(t => GetTextureFormatKey(t.Path!))
+                .Where(g => !string.IsNullOrEmpty(g.Key))
+                .Select(g => g.OrderBy(t => t.Path, StringComparer.Ordinal).ToList())
+                .ToList();
+            if (groups.Count <= 1)
+                return groups.FirstOrDefault() ?? validTextures;
+
+            var candidates = BuildTextureBaseCandidates(skelPath, atlasEntry).ToArray();
+            var scoredGroups = groups
+                .Select(g => new
+                {
+                    Files = g,
+                    FormatKey = GetTextureFormatKey(g[0].Path!),
+                    BaseMatchCount = g.Count(t => TextureStemMatchesAnyCandidate(GetTextureStem(t.Path!), candidates)),
+                    StemKey = string.Join("\n", g.Select(t => GetTextureStem(t.Path!)).OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+                })
+                .ToList();
+
+            var bestMatch = scoredGroups.Max(g => g.BaseMatchCount);
+            if (bestMatch > 0)
+            {
+                return scoredGroups
+                    .Where(g => g.BaseMatchCount == bestMatch)
+                    .OrderByDescending(g => g.Files.Count)
+                    .ThenBy(g => GetTextureFormatPriority(g.FormatKey))
+                    .First()
+                    .Files;
+            }
+
+            if (scoredGroups.Select(g => g.StemKey).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1)
+            {
+                return scoredGroups
+                    .OrderBy(g => GetTextureFormatPriority(g.FormatKey))
+                    .First()
+                    .Files;
+            }
+
+            return validTextures
+                .OrderBy(t => t.Path, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static IEnumerable<string> BuildTextureBaseCandidates(string skelPath, GitHubTreeEntry? atlasEntry)
+        {
+            var skelName = GetFileName(skelPath);
+            foreach (var (skelSuffix, _) in _suffixPairs)
+            {
+                if (skelName.EndsWith(skelSuffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return StripSuffix(skelName, skelSuffix);
+                    break;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(atlasEntry?.Path))
+            {
+                var atlasName = GetFileName(atlasEntry.Path!);
+                if (atlasName.EndsWith(".atlas.txt", StringComparison.OrdinalIgnoreCase))
+                    yield return StripSuffix(atlasName, ".atlas.txt");
+                else if (atlasName.EndsWith(".atlas", StringComparison.OrdinalIgnoreCase))
+                    yield return StripSuffix(atlasName, ".atlas");
+            }
+        }
+
+        private static bool TextureStemMatchesAnyCandidate(string stem, IReadOnlyCollection<string> candidates)
+        {
+            return candidates.Any(candidate =>
+                stem.Equals(candidate, StringComparison.OrdinalIgnoreCase)
+                || stem.StartsWith(candidate + "_", StringComparison.OrdinalIgnoreCase)
+                || stem.StartsWith(candidate + "-", StringComparison.OrdinalIgnoreCase)
+                || stem.StartsWith(candidate + ".", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsTextureFileName(string lowerName)
+            => _textureSuffixes.Any(lowerName.EndsWith);
+
+        private static string GetTextureFormatKey(string path)
+        {
+            var lowerName = GetFileName(path).ToLowerInvariant();
+            if (lowerName.EndsWith(".png")) return "png";
+            if (lowerName.EndsWith(".webp")) return "webp";
+            if (lowerName.EndsWith(".jpg") || lowerName.EndsWith(".jpeg")) return "jpg";
+            return string.Empty;
+        }
+
+        private static int GetTextureFormatPriority(string formatKey) => formatKey switch
+        {
+            "png" => 0,
+            "webp" => 1,
+            "jpg" => 2,
+            _ => 10
+        };
+
+        private static string GetTextureStem(string path)
+        {
+            var fileName = GetFileName(path);
+            foreach (var suffix in _textureSuffixes)
+            {
+                if (fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                    return fileName[..^suffix.Length];
+            }
+
+            return fileName;
         }
 
         private static void SortBundles(List<SpineBundle> bundles)
@@ -659,7 +784,7 @@ namespace SpineViewer.NetSource.Services
             public List<(GitHubTreeEntry Entry, string Suffix)> SkelFiles { get; } = [];
             public List<GitHubTreeEntry> JsonFiles { get; } = [];
             public Dictionary<string, GitHubTreeEntry> AtlasFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
-            public List<GitHubTreeEntry> PngFiles { get; } = [];
+            public List<GitHubTreeEntry> TextureFiles { get; } = [];
         }
     }
 }
