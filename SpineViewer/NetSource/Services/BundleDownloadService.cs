@@ -155,7 +155,7 @@ namespace SpineViewer.NetSource.Services
 
             var skelLocal = Path.Combine(req.LocalBundleDir, GetFileName(b.SkelPath));
             if (req.TrackInLibrary)
-                SaveDownloadIndex(req, skelLocal);
+                SaveDownloadIndex(req);
 
             return new BundleDownloadResult(req, skelLocal, downloadedBytes, allExist);
         }
@@ -167,19 +167,20 @@ namespace SpineViewer.NetSource.Services
         {
             var index = LoadDownloadIndex(repoId);
             var key = BuildBundleKey(bundle);
+            var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, commitSha, bundle.BundleDir);
+            var filesExist = BundleFilesExist(bundle, localDir);
             if (index.Bundles.TryGetValue(key, out var entry))
             {
                 var updatedAt = ParseIso(entry.UpdatedAt);
-                if (EntryMatchesBundle(entry, bundle, commitSha))
-                {
-                    if (EntryFilesExist(entry, NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, commitSha, bundle.BundleDir)))
-                        return new LocalBundleInfo(DownloadedBundleState.Current, updatedAt);
-                }
+                if (!filesExist)
+                    return new LocalBundleInfo(DownloadedBundleState.None, updatedAt);
+                if (EntryMatchesBundle(entry, bundle))
+                    return new LocalBundleInfo(DownloadedBundleState.Current, updatedAt);
 
                 return new LocalBundleInfo(DownloadedBundleState.Outdated, updatedAt);
             }
 
-            if (BundleFilesExist(bundle, NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, commitSha, bundle.BundleDir)))
+            if (filesExist)
                 return new LocalBundleInfo(DownloadedBundleState.Outdated, null);
 
             return new LocalBundleInfo(DownloadedBundleState.None, null);
@@ -335,7 +336,7 @@ namespace SpineViewer.NetSource.Services
             }
         }
 
-        private void SaveDownloadIndex(BundleDownloadRequest req, string localSkelPath)
+        private void SaveDownloadIndex(BundleDownloadRequest req)
         {
             lock (_downloadIndexLock)
             {
@@ -344,14 +345,12 @@ namespace SpineViewer.NetSource.Services
                 {
                     BundleDir = req.Bundle.BundleDir,
                     ModelName = req.Bundle.ModelName,
-                    CommitSha = req.CommitSha,
                     SkelPath = req.Bundle.SkelPath,
                     AtlasPath = req.Bundle.AtlasPath,
                     PngPaths = req.Bundle.PngPaths.ToList(),
                     BundleHash = req.Bundle.BundleHash,
                     TotalSize = req.Bundle.TotalSize,
                     FileCount = req.Bundle.FileCount,
-                    LocalSkelPath = localSkelPath,
                     UpdatedAt = DateTime.UtcNow.ToString("o")
                 };
 
@@ -377,13 +376,9 @@ namespace SpineViewer.NetSource.Services
         private static string BuildBundleKey(SpineBundle bundle)
             => $"{bundle.BundleDir}\n{bundle.ModelName}";
 
-        private static bool EntryMatchesBundle(DownloadIndexEntry entry, SpineBundle bundle, string commitSha)
+        private static bool EntryMatchesBundle(DownloadIndexEntry entry, SpineBundle bundle)
         {
-            var versionMatches = !string.IsNullOrEmpty(entry.BundleHash) && !string.IsNullOrEmpty(bundle.BundleHash)
-                ? string.Equals(entry.BundleHash, bundle.BundleHash, StringComparison.OrdinalIgnoreCase)
-                : string.Equals(entry.CommitSha, commitSha, StringComparison.OrdinalIgnoreCase);
-
-            return versionMatches
+            return string.Equals(entry.BundleHash, bundle.BundleHash, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(entry.SkelPath, bundle.SkelPath, StringComparison.Ordinal)
                 && string.Equals(entry.AtlasPath ?? string.Empty, bundle.AtlasPath ?? string.Empty, StringComparison.Ordinal)
                 && entry.FileCount == bundle.FileCount
@@ -395,14 +390,6 @@ namespace SpineViewer.NetSource.Services
         {
             return left.Count == right.Count
                 && left.ToHashSet(StringComparer.Ordinal).SetEquals(right);
-        }
-
-        private static bool EntryFilesExist(DownloadIndexEntry entry, string localDir)
-        {
-            if (string.IsNullOrWhiteSpace(localDir) || !Directory.Exists(localDir)) return false;
-            if (string.IsNullOrEmpty(entry.SkelPath) || !File.Exists(Path.Combine(localDir, GetFileName(entry.SkelPath)))) return false;
-            if (!string.IsNullOrEmpty(entry.AtlasPath) && !File.Exists(Path.Combine(localDir, GetFileName(entry.AtlasPath)))) return false;
-            return entry.PngPaths.All(p => File.Exists(Path.Combine(localDir, GetFileName(p))));
         }
 
         private static bool BundleFilesExist(SpineBundle bundle, string localDir)
@@ -430,14 +417,12 @@ namespace SpineViewer.NetSource.Services
         {
             public string BundleDir { get; set; } = string.Empty;
             public string ModelName { get; set; } = string.Empty;
-            public string CommitSha { get; set; } = string.Empty;
             public string SkelPath { get; set; } = string.Empty;
             public string? AtlasPath { get; set; }
             public List<string> PngPaths { get; set; } = [];
             public string? BundleHash { get; set; }
             public long TotalSize { get; set; }
             public int FileCount { get; set; }
-            public string LocalSkelPath { get; set; } = string.Empty;
             public string UpdatedAt { get; set; } = string.Empty;
         }
     }

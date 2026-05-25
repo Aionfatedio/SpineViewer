@@ -15,7 +15,7 @@ namespace SpineViewer.NetSource.Services
 
         public const string TreesCacheFileName = "trees.json";
 
-        public const string DownloadIndexFileName = "download-index.json";
+        public const string DownloadIndexFileName = "downloaded-bundles.json";
 
         public const string DownloadsFolderName = "downloads";
 

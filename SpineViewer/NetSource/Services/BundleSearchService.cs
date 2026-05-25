@@ -12,6 +12,7 @@ namespace SpineViewer.NetSource.Services
         string RepoDisplayName,
         string CommitSha,
         DateTime? CommitDate,
+        string DownloadCommitSha,
         int RepoOrderIndex);
 
     public class BundleSearchService
@@ -47,14 +48,15 @@ namespace SpineViewer.NetSource.Services
 
                 var displayName = repoDisplayNames.TryGetValue(repoId, out var dn) ? dn : repoId;
                 var orderIdx = repoOrder.TryGetValue(repoId, out var oi) ? oi : int.MaxValue;
-                var fallbackDate = ParseCommitDate(cache.HeadCommitDate);
+                var headDate = ParseCommitDate(cache.HeadCommitDate);
 
                 foreach (var b in cache.Bundles)
                 {
                     if (!Match(b)) continue;
                     var sha = string.IsNullOrEmpty(b.CommitSha) ? cache.HeadCommit : b.CommitSha!;
-                    var date = string.IsNullOrEmpty(b.CommitDate) ? fallbackDate : ParseCommitDate(b.CommitDate);
-                    results.Add(new BundleSearchResult(b, repoId, displayName, sha, date, orderIdx));
+                    var date = string.IsNullOrEmpty(b.CommitDate) ? headDate : ParseCommitDate(b.CommitDate);
+                    var downloadSha = string.IsNullOrEmpty(cache.HeadCommit) ? sha : cache.HeadCommit;
+                    results.Add(new BundleSearchResult(b, repoId, displayName, sha, date, downloadSha, orderIdx));
                     if (limit > 0 && results.Count >= limit) return results;
                 }
             }

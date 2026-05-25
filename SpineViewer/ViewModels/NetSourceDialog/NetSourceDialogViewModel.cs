@@ -180,7 +180,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             SearchResults.ReplaceAll(results.Select(r =>
             {
                 var localInfo = HasToken
-                    ? _downloadService.GetBundleInfo(r.RepoId, r.Bundle, r.CommitSha)
+                    ? _downloadService.GetBundleInfo(r.RepoId, r.Bundle, r.DownloadCommitSha)
                     : new LocalBundleInfo(DownloadedBundleState.None, null);
                 var item = new NetSourceBundleItemViewModel(r)
                 {
@@ -487,7 +487,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 var localDir = saveToSelectedDir
                     ? targetDir!
                     : System.IO.Path.Combine(targetDir!, SanitizeName(it.Bundle.ModelName));
-                reqs.Add(new BundleDownloadRequest(cfg, it.Bundle, it.Result.CommitSha, localDir, TrackInLibrary: false));
+                reqs.Add(new BundleDownloadRequest(cfg, it.Bundle, it.Result.DownloadCommitSha, localDir, TrackInLibrary: false));
             }
             if (reqs.Count == 0) return;
 
@@ -565,11 +565,11 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             {
                 var cfg = Repos.FirstOrDefault(r => r.Config.RepoId == it.Result.RepoId)?.Config;
                 if (cfg is null) continue;
-                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Result.CommitSha, it.Bundle.BundleDir);
+                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Result.DownloadCommitSha, it.Bundle.BundleDir);
                 reqs.Add(new BundleDownloadRequest(
                     cfg,
                     it.Bundle,
-                    it.Result.CommitSha,
+                    it.Result.DownloadCommitSha,
                     localDir,
                     TrackInLibrary: true,
                     OverwriteExisting: true));
@@ -660,10 +660,10 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             {
                 try
                 {
-                    var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, it.Result.RepoId, it.Result.CommitSha, it.Bundle.BundleDir);
+                    var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, it.Result.RepoId, it.Result.DownloadCommitSha, it.Bundle.BundleDir);
                     var localSkelPath = System.IO.Path.Combine(localDir, GetRepoFileName(it.Bundle.SkelPath));
                     unloadedModels += _vmMain.SpineObjectListViewModel.RemoveLoadedSpineObjectFromPathIfUnderRoot(localSkelPath, repoDownloadsRoot);
-                    removedFiles += _downloadService.RemoveLocalFiles(it.Result.RepoId, it.Bundle, it.Result.CommitSha);
+                    removedFiles += _downloadService.RemoveLocalFiles(it.Result.RepoId, it.Bundle, it.Result.DownloadCommitSha);
                 }
                 catch (Exception ex)
                 {
@@ -710,7 +710,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 var cfg = Repos.FirstOrDefault(r => r.Config.RepoId == it.Result.RepoId)?.Config;
                 if (cfg is null) continue;
 
-                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Result.CommitSha, it.Bundle.BundleDir);
+                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Result.DownloadCommitSha, it.Bundle.BundleDir);
                 var localTargetSkelPath = System.IO.Path.Combine(localDir, GetRepoFileName(it.Bundle.SkelPath));
                 if (_vmMain.SpineObjectListViewModel.TrySelectLoadedSpineObject(localTargetSkelPath))
                 {
@@ -719,14 +719,14 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 }
 
                 var localInfo = HasToken
-                    ? _downloadService.GetBundleInfo(it.Result.RepoId, it.Bundle, it.Result.CommitSha)
+                    ? _downloadService.GetBundleInfo(it.Result.RepoId, it.Bundle, it.Result.DownloadCommitSha)
                     : new LocalBundleInfo(DownloadedBundleState.None, null);
                 var localState = localInfo.State;
                 it.LocalState = localState;
                 it.LocalUpdatedAt = localInfo.UpdatedAt;
                 if (HasToken
                     && localState == DownloadedBundleState.Current
-                    && _downloadService.TryGetLocalSkelPath(it.Result.RepoId, it.Bundle, it.Result.CommitSha, out var localSkelPath))
+                    && _downloadService.TryGetLocalSkelPath(it.Result.RepoId, it.Bundle, it.Result.DownloadCommitSha, out var localSkelPath))
                 {
                     localSkelPaths.Add(localSkelPath);
                     continue;
@@ -735,27 +735,27 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 reqs.Add(new BundleDownloadRequest(
                     cfg,
                     it.Bundle,
-                    it.Result.CommitSha,
+                    it.Result.DownloadCommitSha,
                     localDir,
                     TrackInLibrary: true,
-                    OverwriteExisting: !HasToken || localState == DownloadedBundleState.Outdated));
+                    OverwriteExisting: !HasToken || localState != DownloadedBundleState.Current));
             }
             if (reqs.Count == 0)
             {
                 if (localSkelPaths.Count > 0)
                 {
                     var loadSummary = _vmMain.SpineObjectListViewModel.AddSpineObjectFilesImmediately(localSkelPaths);
-                    var totalAlreadyLoaded = alreadyLoaded + loadSummary.Reused;
+                    var totalLoaded = loadSummary.Loaded + alreadyLoaded + loadSummary.Reused;
                     if (loadSummary.Failed > 0)
-                        _logger.Warn("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded, {1} already loaded, {2} load failed",
-                            loadSummary.Loaded, totalAlreadyLoaded, loadSummary.Failed);
+                        _logger.Warn("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded, {1} load failed",
+                            totalLoaded, loadSummary.Failed);
                     else
-                        _logger.Info("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded, {1} already loaded",
-                            loadSummary.Loaded, totalAlreadyLoaded);
+                        _logger.Info("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded",
+                            totalLoaded);
                 }
                 else if (alreadyLoaded > 0)
                 {
-                    _logger.Info("GitHub repo import finished: 0 bundle(s) downloaded, 0 loaded, {0} already loaded", alreadyLoaded);
+                    _logger.Info("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded", alreadyLoaded);
                 }
                 return;
             }
@@ -835,13 +835,13 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 });
             }
 
-            var totalAlreadyLoaded = alreadyLoaded + loadSummary.Reused;
+            var totalLoaded = loadSummary.Loaded + alreadyLoaded + loadSummary.Reused;
             if (failedBundle > 0 || loadSummary.Failed > 0)
-                _logger.Warn("GitHub repo import finished: {0} bundle(s) downloaded, {1} download failed, {2} loaded, {3} already loaded, {4} load failed",
-                    successBundle, failedBundle, loadSummary.Loaded, totalAlreadyLoaded, loadSummary.Failed);
+                _logger.Warn("GitHub repo import finished: {0} bundle(s) downloaded, {1} download failed, {2} loaded, {3} load failed",
+                    successBundle, failedBundle, totalLoaded, loadSummary.Failed);
             else
-                _logger.Info("GitHub repo import finished: {0} bundle(s) downloaded, {1} loaded, {2} already loaded",
-                    successBundle, loadSummary.Loaded, totalAlreadyLoaded);
+                _logger.Info("GitHub repo import finished: {0} bundle(s) downloaded, {1} loaded",
+                    successBundle, totalLoaded);
         }
 
         #endregion
