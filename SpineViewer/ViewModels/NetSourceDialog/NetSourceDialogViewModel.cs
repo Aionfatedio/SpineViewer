@@ -46,6 +46,8 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
         private CancellationTokenSource? _downloadCts;
 
+        private bool _disposed;
+
         public NetSourceDialogViewModel(MainWindowViewModel vmMain)
         {
             _vmMain = vmMain;
@@ -65,7 +67,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             foreach (var cfg in vmMain.NetSourceRepoConfigs ?? [])
                 Repos.Add(new NetSourceRepoItemViewModel(cfg));
 
-            _ = LoadAllAsync();
+            RunBackground(LoadAllAsync(), "Load GitHub repo indexes");
         }
 
         public bool HasToken => _api.HasToken;
@@ -325,7 +327,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             PersistRepoList();
             NotifyRepoCommandStates();
 
-            _ = RefreshRepoAsync(item, forceFull: false);
+            RunBackground(RefreshRepoAsync(item, forceFull: false), "Refresh GitHub repo");
         }
 
         private bool IsDuplicateRepo(RepoSourceConfig cfg)
@@ -343,7 +345,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         public RelayCommand<NetSourceRepoItemViewModel?> Cmd_RefreshRepo => _cmd_RefreshRepo ??= new(item =>
         {
             if (!CanRefreshRepo(item)) return;
-            _ = RefreshRepoAsync(item, forceFull: false, resetSort: true);
+            RunBackground(RefreshRepoAsync(item, forceFull: false, resetSort: true), "Refresh GitHub repo");
         }, CanRefreshRepo);
         private RelayCommand<NetSourceRepoItemViewModel?>? _cmd_RefreshRepo;
 
@@ -448,7 +450,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             foreach (var item in Repos.ToArray())
             {
                 if (!CanRefreshRepo(item)) continue;
-                _ = RefreshRepoAsync(item, forceFull: false, resetSort: true);
+                RunBackground(RefreshRepoAsync(item, forceFull: false, resetSort: true), "Refresh GitHub repo");
             }
         });
         private RelayCommand? _cmd_RefreshAll;
@@ -848,10 +850,37 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
         #region 同步实现
 
+        private void RunBackground(Task task, string operationName)
+        {
+            _ = ObserveBackgroundTaskAsync(task, operationName);
+        }
+
+        private async Task ObserveBackgroundTaskAsync(Task task, string operationName)
+        {
+            try
+            {
+                await task.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException) when (_disposed)
+            {
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex.ToString());
+                _logger.Warn("{0} failed: {1}", operationName, ex.Message);
+            }
+        }
+
         private async Task LoadAllAsync()
         {
             foreach (var item in Repos.ToArray())
             {
+                if (_disposed || _indexCts.IsCancellationRequested)
+                    return;
+
                 var cached = _indexService.TryLoadCache(item.Config.RepoId);
                 if (cached is not null && cached.Bundles.Count > 0)
                 {
@@ -868,12 +897,18 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
             foreach (var item in Repos.ToArray())
             {
+                if (_disposed || _indexCts.IsCancellationRequested)
+                    return;
+
                 await RefreshRepoAsync(item, forceFull: false);
             }
         }
 
         private async Task RefreshRepoAsync(NetSourceRepoItemViewModel item, bool forceFull, bool resetSort = false)
         {
+            if (_disposed || _indexCts.IsCancellationRequested)
+                return;
+
             item.Status = RepoIndexStatus.Indexing;
             item.ErrorMessage = null;
             item.IndexDone = 0;
@@ -889,6 +924,8 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                     item.IndexTotal = p.Total;
                 });
                 var cache = await Task.Run(() => _indexService.RefreshAsync(item.Config, forceFull, ct, progress), ct);
+                if (_disposed || ct.IsCancellationRequested)
+                    return;
 
                 _caches[item.Config.RepoId] = cache;
                 _repoDisplayNames[item.Config.RepoId] = item.DisplayName;
@@ -907,11 +944,18 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             }
             catch (OperationCanceledException)
             {
+                if (_disposed)
+                    return;
+
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     item.Status = RepoIndexStatus.Pending;
                     NotifyRepoCommandStates();
                 });
+            }
+            catch (ObjectDisposedException) when (_disposed || ct.IsCancellationRequested)
+            {
+                return;
             }
             catch (Exception ex)
             {
@@ -949,12 +993,14 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
         public void Dispose()
         {
+            if (_disposed)
+                return;
+
+            _disposed = true;
             PersistSearchState();
             _vmMain.SaveNetSourceState();
             _indexCts.Cancel();
-            _indexCts.Dispose();
             _downloadCts?.Cancel();
-            _downloadCts?.Dispose();
             _api.Dispose();
         }
     }

@@ -275,7 +275,7 @@
     <s:String x:Key="Str_NetSourceAddRepoTooltip">添加仓库</s:String>
     <s:String x:Key="Str_NetSourceRefreshAllTooltip">全部刷新</s:String>
     <s:String x:Key="Str_NetSourceBundlesSuffix"> 个模型</s:String>
-    <s:String x:Key="Str_NetSourceTruncatedWarning">⚠ 仓库文件数超过 GitHub API 上限, 结果部分缺失</s:String>
+    <s:String x:Key="Str_NetSourceTruncatedWarning">⚠ 仓库文件数超过 GitHub API 上限, 部分内容缺失</s:String>
     <s:String x:Key="Str_NetSourceRefreshRepo">刷新</s:String>
     <s:String x:Key="Str_NetSourceRemoveRepo">移除仓库</s:String>
     <s:String x:Key="Str_NetSourceMoveUp">上移</s:String>
@@ -285,7 +285,7 @@
     <s:String x:Key="Str_NetSourceRepoStatusIndexing">正在索引…</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusIndexingProgress">正在索引 {0}/{1}</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusReady">已就绪</s:String>
-    <s:String x:Key="Str_NetSourceRepoStatusStale">可用</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusStale">可用 (内容缺失)</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusFailed">失败</s:String>
     <s:String x:Key="Str_NetSourceInvalidRepoUrl">无法识别仓库地址, 支持格式: https://github.com/owner/repo 或 owner/repo</s:String>
     <s:String x:Key="Str_NetSourceRepoAlreadyAdded">该仓库已添加</s:String>
