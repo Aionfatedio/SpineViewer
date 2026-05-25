@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using SpineViewer.NetSource.Models;
 using System;
 using System.Globalization;
+using System.Windows;
 
 namespace SpineViewer.ViewModels.NetSourceDialog
 {
@@ -36,11 +37,13 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
         public string StatusText => _status switch
         {
-            RepoIndexStatus.Pending => "等待刷新",
-            RepoIndexStatus.Indexing => IndexTotal > 0 ? $"正在索引 {IndexDone}/{IndexTotal}" : "正在索引",
-            RepoIndexStatus.Ready => "已就绪",
-            RepoIndexStatus.Stale => "可用 (有更新)",
-            RepoIndexStatus.Failed => "失败",
+            RepoIndexStatus.Pending => Str("Str_NetSourceRepoStatusPending"),
+            RepoIndexStatus.Indexing => IndexTotal > 0
+                ? string.Format(Str("Str_NetSourceRepoStatusIndexingProgress"), IndexDone, IndexTotal)
+                : Str("Str_NetSourceRepoStatusIndexing"),
+            RepoIndexStatus.Ready => Str("Str_NetSourceRepoStatusReady"),
+            RepoIndexStatus.Stale => Str("Str_NetSourceRepoStatusStale"),
+            RepoIndexStatus.Failed => Str("Str_NetSourceRepoStatusFailed"),
             _ => string.Empty
         };
 
@@ -110,5 +113,8 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 return d.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
             return null;
         }
+
+        private static string Str(string key)
+            => Application.Current.TryFindResource(key) as string ?? key;
     }
 }

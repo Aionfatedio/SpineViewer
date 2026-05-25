@@ -277,6 +277,9 @@ public partial class MainWindow : Window
 
             _vm.NetSourceRepoConfigs = m.NetSourceRepoConfigs ?? [];
             _vm.NetSourceAggregateSearch = m.NetSourceAggregateSearch;
+            _vm.NetSourceSearchQuery = m.NetSourceSearchQuery;
+            _vm.NetSourceSortKey = m.NetSourceSortKey;
+            _vm.NetSourceSortDescending = m.NetSourceSortDescending;
 
             _vm.SFMLRendererViewModel.SetResolution(m.ResolutionX, m.ResolutionY);
             _vm.SFMLRendererViewModel.Speed = m.Speed;
@@ -314,6 +317,9 @@ public partial class MainWindow : Window
 
             NetSourceRepoConfigs = _vm.NetSourceRepoConfigs?.Count > 0 ? _vm.NetSourceRepoConfigs : null,
             NetSourceAggregateSearch = _vm.NetSourceAggregateSearch,
+            NetSourceSearchQuery = _vm.NetSourceSearchQuery,
+            NetSourceSortKey = _vm.NetSourceSortKey,
+            NetSourceSortDescending = _vm.NetSourceSortDescending,
 
             ResolutionX = _vm.SFMLRendererViewModel.ResolutionX,
             ResolutionY = _vm.SFMLRendererViewModel.ResolutionY,

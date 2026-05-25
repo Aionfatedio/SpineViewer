@@ -5,11 +5,17 @@ namespace SpineViewer.NetSource.Services
 {
     public static class NetSourcePathProvider
     {
-        public const string DefaultCacheFolderName = "netcache";
+        public const string ResourcesFolderName = "Resources";
+
+        public const string NetCacheFolderName = "netcache";
+
+        public const string SpineFolderName = "Spine";
 
         public const string ReposFolderName = "repos";
 
         public const string TreesCacheFileName = "trees.json";
+
+        public const string DownloadIndexFileName = "download-index.json";
 
         public const string DownloadsFolderName = "downloads";
 
@@ -17,9 +23,7 @@ namespace SpineViewer.NetSource.Services
 
         public static string GetDefaultCacheRoot()
         {
-            var exeDir = Path.GetDirectoryName(Environment.ProcessPath)
-                ?? AppDomain.CurrentDomain.BaseDirectory;
-            return Path.Combine(exeDir, DefaultCacheFolderName);
+            return Path.Combine(GetExeDir(), ResourcesFolderName);
         }
 
         public static string ResolveCacheRoot(string? userConfigured)
@@ -29,29 +33,53 @@ namespace SpineViewer.NetSource.Services
             return Path.GetFullPath(userConfigured);
         }
 
+        public static string GetNetCacheDir(string cacheRoot)
+            => Path.Combine(cacheRoot, NetCacheFolderName);
+
+        public static string GetSpineRoot(string cacheRoot)
+            => Path.Combine(cacheRoot, SpineFolderName);
+
+        public static string GetReposRoot(string cacheRoot)
+            => Path.Combine(GetSpineRoot(cacheRoot), ReposFolderName);
+
         public static string GetRepoCacheDir(string cacheRoot, string repoId)
-            => Path.Combine(cacheRoot, ReposFolderName, repoId);
+            => Path.Combine(GetReposRoot(cacheRoot), repoId);
 
         public static string GetRepoTreesCachePath(string cacheRoot, string repoId)
             => Path.Combine(GetRepoCacheDir(cacheRoot, repoId), TreesCacheFileName);
+
+        public static string GetDownloadIndexPath(string cacheRoot, string repoId)
+            => Path.Combine(GetRepoCacheDir(cacheRoot, repoId), DownloadIndexFileName);
 
         public static string GetRepoDownloadsDir(string cacheRoot, string repoId)
             => Path.Combine(GetRepoCacheDir(cacheRoot, repoId), DownloadsFolderName);
 
         public static string GetBundleLocalDir(string cacheRoot, string repoId, string commitSha, string bundleDir)
         {
-            var commitShort = string.IsNullOrEmpty(commitSha) ? "head" : commitSha[..Math.Min(7, commitSha.Length)];
             var safeBundleDir = (bundleDir ?? string.Empty).Replace('/', Path.DirectorySeparatorChar);
-            return Path.Combine(GetRepoDownloadsDir(cacheRoot, repoId), commitShort, safeBundleDir);
+            return Path.Combine(GetRepoDownloadsDir(cacheRoot, repoId), safeBundleDir);
         }
 
         public static string GetCredentialsFilePath(string cacheRoot)
-            => Path.Combine(cacheRoot, CredentialsFileName);
+            => Path.Combine(GetNetCacheDir(cacheRoot), CredentialsFileName);
+
+        public static void EnsureLayout(string cacheRoot)
+        {
+            EnsureDirectoryExists(GetNetCacheDir(cacheRoot));
+            EnsureDirectoryExists(GetSpineRoot(cacheRoot));
+            EnsureDirectoryExists(GetReposRoot(cacheRoot));
+        }
 
         public static void EnsureDirectoryExists(string dir)
         {
             if (!Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
+        }
+
+        private static string GetExeDir()
+        {
+            return Path.GetDirectoryName(Environment.ProcessPath)
+                ?? AppDomain.CurrentDomain.BaseDirectory;
         }
     }
 }

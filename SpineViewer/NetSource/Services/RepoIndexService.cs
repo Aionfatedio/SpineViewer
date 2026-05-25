@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -19,6 +20,8 @@ namespace SpineViewer.NetSource.Services
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         private const int GraphQLBatchSize = 100;
+
+        private const int CompareFilesSoftLimit = 300;
 
         private static readonly (string Skel, string Atlas)[] _suffixPairs =
         [
@@ -107,41 +110,160 @@ namespace SpineViewer.NetSource.Services
             DateTime? finalDate = TryParseIso(repoInfo.PushedAt) ?? branchCommitDate;
 
             var cached = TryLoadCache(config.RepoId);
-            if (!forceFull
-                && cached is not null
-                && string.Equals(cached.HeadCommit, headSha, StringComparison.OrdinalIgnoreCase)
-                && cached.Bundles.Count > 0)
+            if (!forceFull && cached is not null && cached.Bundles.Count > 0)
             {
-                bool dirty = false;
-                if (finalDate.HasValue)
-                {
-                    var newIso = finalDate.Value.ToString("o");
-                    if (!string.Equals(cached.HeadCommitDate, newIso, StringComparison.Ordinal))
-                    {
-                        cached.HeadCommitDate = newIso;
-                        dirty = true;
-                    }
-                }
+                if (string.Equals(cached.HeadCommit, headSha, StringComparison.OrdinalIgnoreCase))
+                    return await UpdateUnchangedCacheAsync(config, cached, headSha, finalDate, ct, progress);
 
-                if (_api.HasToken
-                    && (!cached.CommitMetadataResolved || cached.Bundles.Any(b => string.IsNullOrEmpty(b.CommitSha))))
-                {
-                    cached.CommitMetadataResolved = await ResolveBundleCommitsAsync(
-                        cached.Bundles,
-                        config.Owner,
-                        config.Name,
-                        headSha,
-                        finalDate,
-                        forceAll: !cached.CommitMetadataResolved,
-                        ct,
-                        progress);
-                    dirty = true;
-                }
-
-                if (dirty) SaveCache(cached);
-                return cached;
+                var incremental = await TryRefreshIncrementalAsync(config, cached, headSha, finalDate, ct, progress);
+                if (incremental is not null)
+                    return incremental;
             }
 
+            return await RefreshFullAsync(config, headSha, finalDate, ct, progress);
+        }
+
+        private async Task<RepoIndexCache> UpdateUnchangedCacheAsync(
+            RepoSourceConfig config,
+            RepoIndexCache cached,
+            string headSha,
+            DateTime? finalDate,
+            CancellationToken ct,
+            IProgress<RepoIndexProgress>? progress)
+        {
+            bool dirty = false;
+            if (!string.Equals(cached.HeadCommit, headSha, StringComparison.OrdinalIgnoreCase))
+            {
+                cached.HeadCommit = headSha;
+                dirty = true;
+            }
+
+            var newIso = finalDate?.ToString("o") ?? string.Empty;
+            if (!string.Equals(cached.HeadCommitDate, newIso, StringComparison.Ordinal))
+            {
+                cached.HeadCommitDate = newIso;
+                dirty = true;
+            }
+
+            if (_api.HasToken
+                && (!cached.CommitMetadataResolved || cached.Bundles.Any(b => string.IsNullOrEmpty(b.CommitSha))))
+            {
+                cached.CommitMetadataResolved = await ResolveBundleCommitsAsync(
+                    cached.Bundles,
+                    config.Owner,
+                    config.Name,
+                    headSha,
+                    finalDate,
+                    forceAll: !cached.CommitMetadataResolved,
+                    ct,
+                    progress);
+                dirty = true;
+            }
+
+            if (dirty)
+            {
+                cached.IndexedAt = DateTime.UtcNow.ToString("o");
+                SaveCache(cached);
+            }
+
+            return cached;
+        }
+
+        private async Task<RepoIndexCache?> TryRefreshIncrementalAsync(
+            RepoSourceConfig config,
+            RepoIndexCache cached,
+            string headSha,
+            DateTime? finalDate,
+            CancellationToken ct,
+            IProgress<RepoIndexProgress>? progress)
+        {
+            if (string.IsNullOrWhiteSpace(cached.HeadCommit))
+                return null;
+
+            GitHubCompareResponse compare;
+            try
+            {
+                compare = await _api.GetCompareAsync(config.Owner, config.Name, cached.HeadCommit, headSha, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex.ToString());
+                _logger.Warn("Compare failed for {0}/{1}, falling back to full index: {2}", config.Owner, config.Name, ex.Message);
+                return null;
+            }
+
+            if (string.Equals(compare.Status, "identical", StringComparison.OrdinalIgnoreCase))
+                return await UpdateUnchangedCacheAsync(config, cached, headSha, finalDate, ct, progress);
+
+            if (!string.Equals(compare.Status, "ahead", StringComparison.OrdinalIgnoreCase)
+                || compare.BehindBy > 0)
+                return null;
+
+            if (compare.Files is null)
+                return null;
+
+            if (compare.Files.Count >= CompareFilesSoftLimit)
+            {
+                _logger.Info("Compare file list reached {0} items for {1}/{2}; falling back to full index", compare.Files.Count, config.Owner, config.Name);
+                return null;
+            }
+
+            var changedDirs = GetChangedBundleDirs(compare.Files);
+            if (changedDirs.Count == 0)
+                return await UpdateUnchangedCacheAsync(config, cached, headSha, finalDate, ct, progress);
+
+            progress?.Report(new RepoIndexProgress(0, changedDirs.Count));
+
+            ct.ThrowIfCancellationRequested();
+            var trees = await _api.GetTreeRecursiveAsync(config.Owner, config.Name, headSha, ct);
+            var allBundles = AggregateBundles(config.RepoId, trees);
+            var changedBundles = allBundles
+                .Where(b => changedDirs.Contains(b.BundleDir))
+                .ToList();
+
+            var mergedBundles = cached.Bundles
+                .Where(b => !changedDirs.Contains(b.BundleDir))
+                .Concat(changedBundles)
+                .ToList();
+            SortBundles(mergedBundles);
+
+            bool commitMetadataResolved = cached.CommitMetadataResolved;
+            if (_api.HasToken)
+            {
+                var resolveTargets = cached.CommitMetadataResolved ? changedBundles : mergedBundles;
+                commitMetadataResolved = await ResolveBundleCommitsAsync(
+                    resolveTargets,
+                    config.Owner,
+                    config.Name,
+                    headSha,
+                    finalDate,
+                    forceAll: !cached.CommitMetadataResolved,
+                    ct,
+                    progress);
+            }
+            else
+            {
+                if (changedBundles.Count > 0)
+                    commitMetadataResolved = false;
+                progress?.Report(new RepoIndexProgress(changedDirs.Count, changedDirs.Count));
+            }
+
+            var newCache = CreateCache(config, headSha, finalDate, commitMetadataResolved, mergedBundles, trees.Truncated);
+            SaveCache(newCache);
+            return newCache;
+        }
+
+        private async Task<RepoIndexCache> RefreshFullAsync(
+            RepoSourceConfig config,
+            string headSha,
+            DateTime? finalDate,
+            CancellationToken ct,
+            IProgress<RepoIndexProgress>? progress)
+        {
             ct.ThrowIfCancellationRequested();
             var trees = await _api.GetTreeRecursiveAsync(config.Owner, config.Name, headSha, ct);
 
@@ -157,7 +279,20 @@ namespace SpineViewer.NetSource.Services
                 ct,
                 progress);
 
-            var newCache = new RepoIndexCache
+            var newCache = CreateCache(config, headSha, finalDate, commitMetadataResolved, bundles, trees.Truncated);
+            SaveCache(newCache);
+            return newCache;
+        }
+
+        private static RepoIndexCache CreateCache(
+            RepoSourceConfig config,
+            string headSha,
+            DateTime? finalDate,
+            bool commitMetadataResolved,
+            List<SpineBundle> bundles,
+            bool truncated)
+        {
+            return new RepoIndexCache
             {
                 SchemaVersion = 1,
                 RepoId = config.RepoId,
@@ -170,10 +305,42 @@ namespace SpineViewer.NetSource.Services
                 IndexedAt = DateTime.UtcNow.ToString("o"),
                 CommitMetadataResolved = commitMetadataResolved,
                 Bundles = bundles,
-                Truncated = trees.Truncated
+                Truncated = truncated
             };
-            SaveCache(newCache);
-            return newCache;
+        }
+
+        private static HashSet<string> GetChangedBundleDirs(IEnumerable<GitHubCompareFile> files)
+        {
+            var dirs = new HashSet<string>(StringComparer.Ordinal);
+
+            void AddPath(string? path)
+            {
+                if (!IsBundleRelevantPath(path))
+                    return;
+                dirs.Add(GetParentDir(path!));
+            }
+
+            foreach (var file in files)
+            {
+                AddPath(file.Filename);
+                AddPath(file.PreviousFilename);
+            }
+
+            return dirs;
+        }
+
+        private static bool IsBundleRelevantPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return false;
+
+            var name = GetFileName(path).ToLowerInvariant();
+            return name.EndsWith(".skel.bytes")
+                || name.EndsWith(".skel")
+                || name.EndsWith(".atlas.txt")
+                || name.EndsWith(".atlas")
+                || name.EndsWith(".json")
+                || name.EndsWith(".png");
         }
 
         private async Task<bool> ResolveBundleCommitsAsync(
@@ -386,11 +553,7 @@ namespace SpineViewer.NetSource.Services
                 }
             }
 
-            bundles.Sort((a, b) =>
-            {
-                var c = string.CompareOrdinal(a.BundleDir, b.BundleDir);
-                return c != 0 ? c : string.CompareOrdinal(a.ModelName, b.ModelName);
-            });
+            SortBundles(bundles);
 
             return bundles;
         }
@@ -400,6 +563,10 @@ namespace SpineViewer.NetSource.Services
             var skelPath = skelEntry.Path!;
             var atlasSuffix = SkelToAtlasSuffix(skelSuffix);
             var atlasEntry = FindAtlasFor(skelPath, skelSuffix, atlasSuffix, bucket);
+            var pngFiles = bucket.PngFiles
+                .Where(p => p.Path is not null)
+                .OrderBy(p => p.Path, StringComparer.Ordinal)
+                .ToList();
 
             var bundle = new SpineBundle
             {
@@ -408,19 +575,47 @@ namespace SpineViewer.NetSource.Services
                 ModelName = StripSuffix(GetFileName(skelPath), skelSuffix),
                 SkelPath = skelPath,
                 AtlasPath = atlasEntry?.Path,
-                PngPaths = bucket.PngFiles
-                    .Where(p => p.Path is not null)
-                    .Select(p => p.Path!)
-                    .OrderBy(p => p, StringComparer.Ordinal)
-                    .ToList()
+                PngPaths = pngFiles.Select(p => p.Path!).ToList(),
+                BundleHash = BuildBundleHash(skelEntry, atlasEntry, pngFiles)
             };
             long total = skelEntry.Size ?? 0;
             int count = 1;
             if (atlasEntry is not null) { total += atlasEntry.Size ?? 0; count++; }
-            foreach (var png in bucket.PngFiles) { total += png.Size ?? 0; count++; }
+            foreach (var png in pngFiles) { total += png.Size ?? 0; count++; }
             bundle.TotalSize = total;
             bundle.FileCount = count;
             return bundle;
+        }
+
+        private static void SortBundles(List<SpineBundle> bundles)
+        {
+            bundles.Sort((a, b) =>
+            {
+                var c = string.CompareOrdinal(a.BundleDir, b.BundleDir);
+                return c != 0 ? c : string.CompareOrdinal(a.ModelName, b.ModelName);
+            });
+        }
+
+        private static string BuildBundleHash(GitHubTreeEntry skelEntry, GitHubTreeEntry? atlasEntry, IReadOnlyList<GitHubTreeEntry> pngFiles)
+        {
+            var sb = new StringBuilder();
+
+            void Append(GitHubTreeEntry entry)
+            {
+                sb.Append(entry.Path).Append('|')
+                    .Append(entry.Sha).Append('|')
+                    .Append(entry.Size?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)
+                    .Append('\n');
+            }
+
+            Append(skelEntry);
+            if (atlasEntry is not null)
+                Append(atlasEntry);
+            foreach (var png in pngFiles)
+                Append(png);
+
+            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+            return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         }
 
         private static string SkelToAtlasSuffix(string skelSuffix) => skelSuffix switch

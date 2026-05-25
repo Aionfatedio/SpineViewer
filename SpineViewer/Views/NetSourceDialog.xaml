@@ -5,6 +5,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:hc="https://handyorg.github.io/handycontrol"
+        xmlns:netmodels="clr-namespace:SpineViewer.NetSource.Models"
         xmlns:vmnet="clr-namespace:SpineViewer.ViewModels.NetSourceDialog"
         d:DataContext="{d:DesignInstance Type=vmnet:NetSourceDialogViewModel}"
         mc:Ignorable="d"
@@ -212,15 +213,44 @@
                           SelectionMode="Extended"
                           VirtualizingPanel.IsVirtualizing="True"
                           GridViewColumnHeader.Click="ResultsListView_HeaderClick"
+                          PreviewMouseRightButtonDown="ResultsListView_PreviewMouseRightButtonDown"
+                          ContextMenuOpening="ResultsListView_ContextMenuOpening"
                           MouseDoubleClick="ResultsListView_MouseDoubleClick">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="{x:Type ListViewItem}" BasedOn="{StaticResource ListViewItemBaseStyle.Small}">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="ToolTip" Value="{Binding LocalStateToolTip}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding LocalState}" Value="{x:Static netmodels:DownloadedBundleState.Current}">
+                                    <Setter Property="Foreground" Value="{DynamicResource DarkInfoBrush}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding LocalState}" Value="{x:Static netmodels:DownloadedBundleState.Outdated}">
+                                    <Setter Property="Foreground" Value="{DynamicResource DarkWarningBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+
                     <ListView.InputBindings>
+                        <KeyBinding Gesture="Delete"
+                                    Command="{Binding Cmd_RemoveLocalFiles}"
+                                    CommandParameter="{Binding SelectedItems, ElementName=_resultsListView}"/>
                         <KeyBinding Gesture="Ctrl+S"
                                     Command="{Binding Cmd_SaveAs}"
                                     CommandParameter="{Binding SelectedItems, ElementName=_resultsListView}"/>
                     </ListView.InputBindings>
 
                     <ListView.ContextMenu>
-                        <ContextMenu>
+                        <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                            <MenuItem Header="{DynamicResource Str_NetSourceUpdateFiles}"
+                                      Visibility="{Binding ShowUpdateLocalFiles, Converter={StaticResource Boolean2VisibilityConverter}}"
+                                      Command="{Binding Cmd_UpdateLocalFiles}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                            <MenuItem Header="{DynamicResource Str_NetSourceRemoveLocalFiles}"
+                                      InputGestureText="Delete"
+                                      Visibility="{Binding ShowRemoveLocalFiles, Converter={StaticResource Boolean2VisibilityConverter}}"
+                                      Command="{Binding Cmd_RemoveLocalFiles}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
                             <MenuItem Header="{DynamicResource Str_NetSourceSaveAs}"
                                       InputGestureText="Ctrl+S"
                                       Command="{Binding Cmd_SaveAs}"

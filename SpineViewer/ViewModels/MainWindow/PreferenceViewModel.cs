@@ -350,7 +350,7 @@ namespace SpineViewer.ViewModels.MainWindow
 
         #endregion
 
-        #region 网络加载首选项
+        #region GitHub 仓库导入首选项
 
         public string? NetSourceCacheRoot
         {

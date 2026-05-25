@@ -19,6 +19,7 @@ namespace SpineViewer.NetSource.Services
         public NetSourceCredentialStore(string cacheRoot)
         {
             _cacheRoot = cacheRoot;
+            NetSourcePathProvider.EnsureLayout(_cacheRoot);
         }
 
         public Dictionary<string, string> LoadAll()
@@ -38,7 +39,7 @@ namespace SpineViewer.NetSource.Services
             catch (Exception ex)
             {
                 _logger.Debug(ex.ToString());
-                _logger.Warn("Failed to load NetSource credentials: {0}", ex.Message);
+                _logger.Warn("Failed to load GitHub repo credentials: {0}", ex.Message);
                 return [];
             }
         }
@@ -56,7 +57,7 @@ namespace SpineViewer.NetSource.Services
             catch (Exception ex)
             {
                 _logger.Debug(ex.ToString());
-                _logger.Error("Failed to save NetSource credentials: {0}", ex.Message);
+                _logger.Error("Failed to save GitHub repo credentials: {0}", ex.Message);
             }
         }
 

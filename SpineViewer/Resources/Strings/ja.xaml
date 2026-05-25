@@ -29,7 +29,7 @@
     <s:String x:Key="Str_Filter">フィルター</s:String>
     <s:String x:Key="Str_ChangeCurrentDirectoryTooltip">フォルダーを開く</s:String>
     <s:String x:Key="Str_RefreshItemsTooltip">リストを更新</s:String>
-    <s:String x:Key="Str_NetSourceTooltip">ネットワーク読み込み</s:String>
+    <s:String x:Key="Str_NetSourceTooltip">GitHub リポジトリ読み込み</s:String>
     <s:String x:Key="Str_FileDirectory">ファイルディレクトリ</s:String>
     <s:String x:Key="Str_FileName">ファイル名</s:String>
     <s:String x:Key="Str_AddSelectedItems">選択項目をインポート</s:String>
@@ -268,8 +268,8 @@
     <s:String x:Key="Str_AutoRunWorkspaceConfigPathTooltip">プログラムが Windows 起動と同時に自動起動した場合に、自動的に読み込むワークスペース設定ファイルを指定します。自動起動が有効な場合にのみ適用されます。</s:String>
     <s:String x:Key="Str_AssociateFileSuffix">ファイル拡張子を関連付ける</s:String>
 
-    <!-- 网络加载 -->
-    <s:String x:Key="Str_NetSourceDialogTitle">ネットワーク読み込み - GitHub リポジトリから Spine モデルを検索してダウンロード</s:String>
+    <!-- GitHub リポジトリ読み込み -->
+    <s:String x:Key="Str_NetSourceDialogTitle">GitHub リポジトリ読み込み - Spine モデルを検索してダウンロード</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlPlaceholder">GitHub リポジトリ URL または owner/repo を入力</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlTooltip">対応形式: https://github.com/owner/repo, https://github.com/owner/repo/tree/branch, owner/repo</s:String>
     <s:String x:Key="Str_NetSourceAddRepoTooltip">リポジトリを追加 (Enter キーも可)</s:String>
@@ -281,6 +281,26 @@
     <s:String x:Key="Str_NetSourceMoveUp">上へ移動 (優先度を上げる)</s:String>
     <s:String x:Key="Str_NetSourceMoveDown">下へ移動 (優先度を下げる)</s:String>
     <s:String x:Key="Str_NetSourceVisitRepo">リポジトリの URL を開く</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusPending">更新待ち</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusIndexing">インデックス作成中</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusIndexingProgress">インデックス作成中 {0}/{1}</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusReady">準備完了</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusStale">利用可能 (更新あり)</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusFailed">失敗</s:String>
+    <s:String x:Key="Str_NetSourceInvalidRepoUrl">リポジトリ URL を認識できません。対応形式: https://github.com/owner/repo または owner/repo</s:String>
+    <s:String x:Key="Str_NetSourceRepoAlreadyAdded">このリポジトリは既に追加されています。</s:String>
+    <s:String x:Key="Str_NetSourceRemoveRepoQuest">リポジトリ {0} とローカルキャッシュを削除しますか?</s:String>
+    <s:String x:Key="Str_NetSourceOpenBrowserFailed">ブラウザーを開けません: {0}</s:String>
+    <s:String x:Key="Str_NetSourceStatusSummary">合計 {0} 個のモデル · 表示中 {1} 件</s:String>
+    <s:String x:Key="Str_NetSourceSaveAsTitle">ローカルに保存</s:String>
+    <s:String x:Key="Str_NetSourceDownloadTitle">モデルをダウンロード中...</s:String>
+    <s:String x:Key="Str_NetSourceLocalCurrentTooltip">最新状態です - 前回更新: {0}</s:String>
+    <s:String x:Key="Str_NetSourceLocalOutdatedTooltip">ファイルの更新が必要です - 前回更新: {0}</s:String>
+    <s:String x:Key="Str_NetSourceGitHubUnauthorized">GitHub 認証に失敗しました (401)。PAT が正しいか、有効期限切れでないか確認してください。{0}</s:String>
+    <s:String x:Key="Str_NetSourceGitHubForbidden">GitHub でアクセスが拒否されました (403)。API レート制限に達した可能性があります (匿名 60/時、認証済み 5000/時)。{0}</s:String>
+    <s:String x:Key="Str_NetSourceGitHubNotFound">GitHub リソースが見つかりません (404)。リポジトリまたはブランチ URL を確認してください。URL: {0}</s:String>
+    <s:String x:Key="Str_NetSourceGitHubUnprocessable">GitHub がリクエストを拒否しました (422)。パラメーターを確認してください。{0}</s:String>
+    <s:String x:Key="Str_NetSourceGitHubGenericError">GitHub リクエストに失敗しました ({0} {1}): {2}</s:String>
     <s:String x:Key="Str_NetSourceSearchPlaceholder">モデル名 / ディレクトリパスを検索</s:String>
     <s:String x:Key="Str_NetSourceAggregate">統合検索</s:String>
     <s:String x:Key="Str_NetSourceAggregateTooltip">オフの場合、左で選択中のリポジトリのみを検索します</s:String>
@@ -291,16 +311,20 @@
     <s:String x:Key="Str_NetSourceColFiles">ファイル数</s:String>
     <s:String x:Key="Str_NetSourceColCommit">コミット</s:String>
     <s:String x:Key="Str_NetSourceColCommitTime">コミット日時</s:String>
-    <s:String x:Key="Str_NetSourceHeaderSortRepoTooltip">クリックでリポジトリ優先度順にソート (再度クリックで反転)。検索/フィルタの再実行でソートはクリアされます。</s:String>
-    <s:String x:Key="Str_NetSourceHeaderSortGenericTooltip">クリックでこの列をソート (再度クリックで反転)。検索/フィルタの再実行でソートはクリアされます。</s:String>
+    <s:String x:Key="Str_NetSourceHeaderSortRepoTooltip">クリックでリポジトリ優先度順にソート (再度クリックで反転)。手動更新でソートはクリアされます。</s:String>
+    <s:String x:Key="Str_NetSourceHeaderSortGenericTooltip">クリックでこの列をソート (再度クリックで反転)。手動更新でソートはクリアされます。</s:String>
     <s:String x:Key="Str_NetSourceDownloadAndImport">ダウンロード &amp; インポート</s:String>
+    <s:String x:Key="Str_NetSourceUpdateFiles">ファイルを更新</s:String>
+    <s:String x:Key="Str_NetSourceUpdateFilesTitle">GitHub リポジトリのファイルを更新中...</s:String>
+    <s:String x:Key="Str_NetSourceRemoveLocalFiles">ローカルファイルを削除</s:String>
+    <s:String x:Key="Str_NetSourceRemoveLocalFilesQuest">選択した {0} 個のモデルのローカルファイルを削除しますか?</s:String>
     <s:String x:Key="Str_NetSourceSaveAs">名前を付けて保存</s:String>
     <s:String x:Key="Str_NetSourceClose">閉じる</s:String>
-    <s:String x:Key="Str_NetSourcePreference">ネットワーク読み込みオプション</s:String>
+    <s:String x:Key="Str_NetSourcePreference">GitHub リポジトリ読み込みオプション</s:String>
     <s:String x:Key="Str_NetSourceCacheRoot">キャッシュディレクトリ</s:String>
-    <s:String x:Key="Str_NetSourceCacheRootTooltip">インデックス、ダウンロード済みファイル、暗号化された資格情報のルートディレクトリ。既定はプログラムと同階層の netcache フォルダーです。</s:String>
+    <s:String x:Key="Str_NetSourceCacheRootTooltip">GitHub リポジトリのリソースルート。資格情報と汎用キャッシュは netcache、モデルとモデルインデックスは Spine に保存します。</s:String>
     <s:String x:Key="Str_NetSourceCacheRootReset">リセット</s:String>
-    <s:String x:Key="Str_NetSourceCacheRootHint">空欄なら既定 (プログラム階層\netcache) を使用</s:String>
+    <s:String x:Key="Str_NetSourceCacheRootHint">空欄なら既定 (プログラム階層\Resources) を使用</s:String>
     <s:String x:Key="Str_NetSourceGitHubToken">GitHub アクセストークン</s:String>
     <s:String x:Key="Str_NetSourceGitHubTokenTooltip">任意。GitHub API のレート制限を緩和します (匿名 60/h → 認証 5000/h)。DPAPI で暗号化保存され、preference.json には書き込まれません。</s:String>
 

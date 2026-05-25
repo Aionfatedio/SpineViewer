@@ -29,7 +29,7 @@
     <s:String x:Key="Str_Filter">筛选</s:String>
     <s:String x:Key="Str_ChangeCurrentDirectoryTooltip">打开目录</s:String>
     <s:String x:Key="Str_RefreshItemsTooltip">刷新列表项</s:String>
-    <s:String x:Key="Str_NetSourceTooltip">网络加载</s:String>
+    <s:String x:Key="Str_NetSourceTooltip">GitHub 仓库导入</s:String>
     <s:String x:Key="Str_FileDirectory">文件目录</s:String>
     <s:String x:Key="Str_FileName">文件名</s:String>
     <s:String x:Key="Str_AddSelectedItems">导入选中项</s:String>
@@ -268,7 +268,7 @@
     <s:String x:Key="Str_AutoRunWorkspaceConfigPathTooltip">设置程序开机自启后自动加载的工作区配置文件，仅在启用开机自启时生效</s:String>
     <s:String x:Key="Str_AssociateFileSuffix">关联文件后缀</s:String>
 
-    <!-- 网络加载 -->
+    <!-- GitHub 仓库导入 -->
     <s:String x:Key="Str_NetSourceDialogTitle">从 GitHub 仓库导入 Spine 模型</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlPlaceholder">输入 GitHub 仓库地址</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlTooltip">支持格式: https://github.com/owner/repo、https://github.com/owner/repo/tree/branch、owner/repo</s:String>
@@ -281,6 +281,26 @@
     <s:String x:Key="Str_NetSourceMoveUp">上移</s:String>
     <s:String x:Key="Str_NetSourceMoveDown">下移</s:String>
     <s:String x:Key="Str_NetSourceVisitRepo">访问仓库地址</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusPending">等待刷新</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusIndexing">正在索引</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusIndexingProgress">正在索引 {0}/{1}</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusReady">已就绪</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusStale">可用 (有更新)</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusFailed">失败</s:String>
+    <s:String x:Key="Str_NetSourceInvalidRepoUrl">无法识别仓库地址, 支持格式: https://github.com/owner/repo 或 owner/repo</s:String>
+    <s:String x:Key="Str_NetSourceRepoAlreadyAdded">该仓库已添加</s:String>
+    <s:String x:Key="Str_NetSourceRemoveRepoQuest">确定移除仓库源 {0} ?</s:String>
+    <s:String x:Key="Str_NetSourceOpenBrowserFailed">无法打开浏览器: {0}</s:String>
+    <s:String x:Key="Str_NetSourceStatusSummary">共 {0} 个模型 · 当前显示 {1} 条</s:String>
+    <s:String x:Key="Str_NetSourceSaveAsTitle">保存到本地</s:String>
+    <s:String x:Key="Str_NetSourceDownloadTitle">下载模型……</s:String>
+    <s:String x:Key="Str_NetSourceLocalCurrentTooltip">已是最新状态 - 上次更新于 {0}</s:String>
+    <s:String x:Key="Str_NetSourceLocalOutdatedTooltip">文件需要更新 - 上次更新于 {0}</s:String>
+    <s:String x:Key="Str_NetSourceGitHubUnauthorized">GitHub 认证失败 (401), 请检查 PAT 是否正确或已过期. {0}</s:String>
+    <s:String x:Key="Str_NetSourceGitHubForbidden">GitHub 拒绝访问 (403), 可能触发了 API 速率限制 (未认证 60/小时, 认证 5000/小时). {0}</s:String>
+    <s:String x:Key="Str_NetSourceGitHubNotFound">GitHub 资源不存在 (404), 请检查仓库/分支地址. URL: {0}</s:String>
+    <s:String x:Key="Str_NetSourceGitHubUnprocessable">GitHub 拒绝请求 (422), 请检查参数. {0}</s:String>
+    <s:String x:Key="Str_NetSourceGitHubGenericError">GitHub 调用失败 ({0} {1}): {2}</s:String>
     <s:String x:Key="Str_NetSourceSearchPlaceholder">搜索模型名 / 目录路径</s:String>
     <s:String x:Key="Str_NetSourceAggregate">聚合搜索</s:String>
     <s:String x:Key="Str_NetSourceAggregateTooltip">关闭后仅搜索选中仓库</s:String>
@@ -294,13 +314,17 @@
     <s:String x:Key="Str_NetSourceHeaderSortRepoTooltip">按仓库优先级排序</s:String>
     <s:String x:Key="Str_NetSourceHeaderSortGenericTooltip">按此列排序</s:String>
     <s:String x:Key="Str_NetSourceDownloadAndImport">导入选中模型</s:String>
+    <s:String x:Key="Str_NetSourceUpdateFiles">更新文件</s:String>
+    <s:String x:Key="Str_NetSourceUpdateFilesTitle">更新 GitHub 仓库文件……</s:String>
+    <s:String x:Key="Str_NetSourceRemoveLocalFiles">移除本地文件</s:String>
+    <s:String x:Key="Str_NetSourceRemoveLocalFilesQuest">确定移除所选 {0} 个模型的本地文件?</s:String>
     <s:String x:Key="Str_NetSourceSaveAs">另存为</s:String>
     <s:String x:Key="Str_NetSourceClose">关闭</s:String>
-    <s:String x:Key="Str_NetSourcePreference">网络加载选项</s:String>
+    <s:String x:Key="Str_NetSourcePreference">GitHub 仓库导入选项</s:String>
     <s:String x:Key="Str_NetSourceCacheRoot">缓存目录</s:String>
-    <s:String x:Key="Str_NetSourceCacheRootTooltip">索引、已下载文件、加密凭证的根目录</s:String>
+    <s:String x:Key="Str_NetSourceCacheRootTooltip">GitHub 仓库资源根目录；凭证等缓存保存至 netcache，模型与模型索引保存至 Spine</s:String>
     <s:String x:Key="Str_NetSourceCacheRootReset">重置</s:String>
-    <s:String x:Key="Str_NetSourceCacheRootHint">留空使用默认 (程序目录/netcache)</s:String>
+    <s:String x:Key="Str_NetSourceCacheRootHint">留空使用默认 (程序目录/Resources)</s:String>
     <s:String x:Key="Str_NetSourceGitHubToken">GitHub 访问令牌</s:String>
     <s:String x:Key="Str_NetSourceGitHubTokenTooltip">可选, 提高 GitHub API 速率限制</s:String>
 

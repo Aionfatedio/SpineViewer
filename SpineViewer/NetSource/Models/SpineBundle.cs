@@ -16,6 +16,8 @@ namespace SpineViewer.NetSource.Models
 
         public List<string> PngPaths { get; set; } = [];
 
+        public string? BundleHash { get; set; }
+
         public long TotalSize { get; set; }
 
         public int FileCount { get; set; }

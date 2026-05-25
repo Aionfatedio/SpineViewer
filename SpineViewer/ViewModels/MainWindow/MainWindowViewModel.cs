@@ -213,9 +213,20 @@ namespace SpineViewer.ViewModels.MainWindow
 
         public bool NetSourceAggregateSearch { get; set; } = true;
 
+        public string? NetSourceSearchQuery { get; set; }
+
+        public string? NetSourceSortKey { get; set; }
+
+        public bool NetSourceSortDescending { get; set; }
+
         public event System.Action? UserStateSaveRequested;
 
         public void SaveNetSourceRepoConfigs()
+        {
+            SaveNetSourceState();
+        }
+
+        public void SaveNetSourceState()
         {
             UserStateSaveRequested?.Invoke();
         }

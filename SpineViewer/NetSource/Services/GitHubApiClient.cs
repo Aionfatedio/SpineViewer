@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace SpineViewer.NetSource.Services
 {
@@ -173,6 +174,12 @@ namespace SpineViewer.NetSource.Services
             return await GetJsonAsync<GitHubTreesResponse>(url, ct);
         }
 
+        public async Task<GitHubCompareResponse> GetCompareAsync(string owner, string name, string baseSha, string headSha, CancellationToken ct = default)
+        {
+            var url = $"{ApiBase}/repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(name)}/compare/{Uri.EscapeDataString(baseSha)}...{Uri.EscapeDataString(headSha)}";
+            return await GetJsonAsync<GitHubCompareResponse>(url, ct);
+        }
+
         public async Task DownloadRawAsync(
             string owner,
             string name,
@@ -301,13 +308,16 @@ namespace SpineViewer.NetSource.Services
             var snippet = string.IsNullOrEmpty(body) ? string.Empty : (body.Length > 200 ? body[..200] + "..." : body);
             return code switch
             {
-                HttpStatusCode.Unauthorized => $"GitHub 认证失败 (401), 请检查 PAT 是否正确或已过期. {snippet}",
-                HttpStatusCode.Forbidden => $"GitHub 拒绝访问 (403), 可能触发了 API 速率限制 (未认证 60/小时, 认证 5000/小时). {snippet}",
-                HttpStatusCode.NotFound => $"GitHub 资源不存在 (404), 请检查仓库/分支地址. URL: {url}",
-                HttpStatusCode.UnprocessableEntity => $"GitHub 拒绝请求 (422), 请检查参数. {snippet}",
-                _ => $"GitHub 调用失败 ({(int)code} {code}): {snippet}"
+                HttpStatusCode.Unauthorized => string.Format(Str("Str_NetSourceGitHubUnauthorized"), snippet),
+                HttpStatusCode.Forbidden => string.Format(Str("Str_NetSourceGitHubForbidden"), snippet),
+                HttpStatusCode.NotFound => string.Format(Str("Str_NetSourceGitHubNotFound"), url),
+                HttpStatusCode.UnprocessableEntity => string.Format(Str("Str_NetSourceGitHubUnprocessable"), snippet),
+                _ => string.Format(Str("Str_NetSourceGitHubGenericError"), (int)code, code, snippet)
             };
         }
+
+        private static string Str(string key)
+            => Application.Current?.TryFindResource(key) as string ?? key;
 
         private static void TrySafeDelete(string path)
         {

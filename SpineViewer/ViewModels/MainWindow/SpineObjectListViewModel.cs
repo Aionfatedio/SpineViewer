@@ -153,6 +153,56 @@ namespace SpineViewer.ViewModels.MainWindow
             }
         }
 
+        public bool TrySelectLoadedSpineObject(string skelPath, string? atlasPath = null)
+        {
+            if (!TryGetFullPath(skelPath, out var normalizedSkelPath))
+                return false;
+
+            SpineObjectModel? loaded;
+            lock (_spineObjectModels.Lock)
+            {
+                loaded = _spineObjectModels.FirstOrDefault(sp =>
+                {
+                    if (!PathEquals(sp.SkelPath, normalizedSkelPath))
+                        return false;
+
+                    return string.IsNullOrWhiteSpace(atlasPath)
+                        || PathEquals(sp.AtlasPath, atlasPath);
+                });
+            }
+
+            if (loaded is null)
+                return false;
+
+            SelectSpineObject(loaded);
+            return true;
+        }
+
+        public int RemoveLoadedSpineObjectFromPathIfUnderRoot(string skelPath, string rootPath)
+        {
+            if (!TryGetFullPath(skelPath, out var normalizedSkelPath))
+                return 0;
+            if (!IsPathUnderRoot(normalizedSkelPath, rootPath))
+                return 0;
+
+            SpineObjectModel[] loaded;
+            lock (_spineObjectModels.Lock)
+            {
+                loaded = _spineObjectModels
+                    .Where(sp => PathEquals(sp.SkelPath, normalizedSkelPath)
+                        && IsPathUnderRoot(sp.SkelPath, rootPath))
+                    .ToArray();
+
+                foreach (var sp in loaded)
+                {
+                    _spineObjectModels.Remove(sp);
+                    sp.Dispose();
+                }
+            }
+
+            return loaded.Length;
+        }
+
         /// <summary>
         /// 用于后台添加模型的任务方法
         /// </summary>
@@ -202,21 +252,12 @@ namespace SpineViewer.ViewModels.MainWindow
         {
             try
             {
+                if (TrySelectLoadedSpineObject(skelPath, atlasPath))
+                    return true;
+
                 var sp = new SpineObjectModel(skelPath, atlasPath);
                 lock (_spineObjectModels.Lock) _spineObjectModels.Insert(0, sp);
-                if (Application.Current.Dispatcher.CheckAccess())
-                {
-                    RequestSelectionChanging?.Invoke(this, new(NotifyCollectionChangedAction.Reset));
-                    RequestSelectionChanging?.Invoke(this, new(NotifyCollectionChangedAction.Add, sp));
-                }
-                else
-                {
-                    Application.Current.Dispatcher.Invoke(() =>
-                    {
-                        RequestSelectionChanging?.Invoke(this, new(NotifyCollectionChangedAction.Reset));
-                        RequestSelectionChanging?.Invoke(this, new(NotifyCollectionChangedAction.Add, sp));
-                    });
-                }
+                SelectSpineObject(sp);
                 return true;
             }
             catch (Exception ex)
@@ -225,6 +266,60 @@ namespace SpineViewer.ViewModels.MainWindow
                 _logger.Error("Failed to load: {0}, {1}", skelPath, ex.Message);
             }
             return false;
+        }
+
+        private void SelectSpineObject(SpineObjectModel sp)
+        {
+            void Select()
+            {
+                RequestSelectionChanging?.Invoke(this, new(NotifyCollectionChangedAction.Reset));
+                RequestSelectionChanging?.Invoke(this, new(NotifyCollectionChangedAction.Add, sp));
+            }
+
+            if (Application.Current.Dispatcher.CheckAccess())
+                Select();
+            else
+                Application.Current.Dispatcher.Invoke(Select);
+        }
+
+        private static bool PathEquals(string path1, string path2)
+        {
+            if (!TryGetFullPath(path1, out var normalizedPath1))
+                return false;
+            if (!TryGetFullPath(path2, out var normalizedPath2))
+                return false;
+
+            return string.Equals(normalizedPath1, normalizedPath2, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPathUnderRoot(string path, string rootPath)
+        {
+            if (!TryGetFullPath(path, out var normalizedPath))
+                return false;
+            if (!TryGetFullPath(rootPath, out var normalizedRoot))
+                return false;
+
+            normalizedRoot = normalizedRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            return normalizedPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryGetFullPath(string? path, out string normalizedPath)
+        {
+            normalizedPath = string.Empty;
+            if (string.IsNullOrWhiteSpace(path))
+                return false;
+
+            try
+            {
+                normalizedPath = Path.GetFullPath(path);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex.ToString());
+                return false;
+            }
         }
 
         #region 模型列表管理菜单项实现

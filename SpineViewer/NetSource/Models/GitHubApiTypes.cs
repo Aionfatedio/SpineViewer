@@ -89,4 +89,37 @@ namespace SpineViewer.NetSource.Models
         [JsonPropertyName("mode")]
         public string? Mode { get; set; }
     }
+
+    public class GitHubCompareResponse
+    {
+        [JsonPropertyName("status")]
+        public string? Status { get; set; }
+
+        [JsonPropertyName("ahead_by")]
+        public int AheadBy { get; set; }
+
+        [JsonPropertyName("behind_by")]
+        public int BehindBy { get; set; }
+
+        [JsonPropertyName("total_commits")]
+        public int TotalCommits { get; set; }
+
+        [JsonPropertyName("files")]
+        public List<GitHubCompareFile> Files { get; set; } = [];
+    }
+
+    public class GitHubCompareFile
+    {
+        [JsonPropertyName("filename")]
+        public string? Filename { get; set; }
+
+        [JsonPropertyName("previous_filename")]
+        public string? PreviousFilename { get; set; }
+
+        [JsonPropertyName("status")]
+        public string? Status { get; set; }
+
+        [JsonPropertyName("sha")]
+        public string? Sha { get; set; }
+    }
 }

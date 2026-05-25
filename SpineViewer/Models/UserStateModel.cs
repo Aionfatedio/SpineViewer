@@ -40,11 +40,17 @@ namespace SpineViewer.Models
 
         #endregion
 
-        #region 网络加载状态
+        #region GitHub 仓库导入状态
 
         public List<RepoSourceConfig>? NetSourceRepoConfigs { get; set; }
 
         public bool NetSourceAggregateSearch { get; set; } = true;
+
+        public string? NetSourceSearchQuery { get; set; }
+
+        public string? NetSourceSortKey { get; set; }
+
+        public bool NetSourceSortDescending { get; set; }
 
         #endregion
 

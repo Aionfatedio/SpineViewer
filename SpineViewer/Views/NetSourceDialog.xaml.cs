@@ -46,6 +46,28 @@ namespace SpineViewer.Views
             vm.Cmd_DownloadAndImport.Execute(list.SelectedItems);
         }
 
+        private void ResultsListView_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not ListView list) return;
+
+            var container = ((DependencyObject)e.OriginalSource)?.GetParent<ListViewItem>(true);
+            if (container is null)
+                return;
+
+            if (!container.IsSelected)
+            {
+                list.SelectedItems.Clear();
+                container.IsSelected = true;
+            }
+        }
+
+        private void ResultsListView_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+        {
+            if (sender is not ListView list) return;
+            var vm = (NetSourceDialogViewModel)DataContext;
+            vm.UpdateResultContextMenuState(list.SelectedItems);
+        }
+
         private void NetSourceDialog_Loaded(object sender, RoutedEventArgs e)
         {
             if (DataContext is not NetSourceDialogViewModel { HasToken: false }) return;

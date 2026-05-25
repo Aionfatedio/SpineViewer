@@ -50,7 +50,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         {
             _vmMain = vmMain;
             _cacheRoot = NetSourcePathProvider.ResolveCacheRoot(vmMain.PreferenceViewModel.NetSourceCacheRoot);
-            NetSourcePathProvider.EnsureDirectoryExists(_cacheRoot);
+            NetSourcePathProvider.EnsureLayout(_cacheRoot);
 
             _credentialStore = new NetSourceCredentialStore(_cacheRoot);
             _api = new GitHubApiClient(token: _credentialStore.GetGitHubToken(), userAgent: $"SpineViewer/{App.Version}");
@@ -58,6 +58,9 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             _downloadService = new BundleDownloadService(_api, _cacheRoot);
 
             _aggregateSearch = vmMain.NetSourceAggregateSearch;
+            _searchQuery = vmMain.NetSourceSearchQuery;
+            _activeSortKey = IsSortKeySupported(vmMain.NetSourceSortKey) ? vmMain.NetSourceSortKey : null;
+            _sortDescending = vmMain.NetSourceSortDescending;
 
             foreach (var cfg in vmMain.NetSourceRepoConfigs ?? [])
                 Repos.Add(new NetSourceRepoItemViewModel(cfg));
@@ -97,7 +100,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 if (SetProperty(ref _aggregateSearch, value))
                 {
                     _vmMain.NetSourceAggregateSearch = value;
-                    _vmMain.SaveNetSourceRepoConfigs();
+                    _vmMain.SaveNetSourceState();
                     RefreshSearch();
                 }
             }
@@ -114,7 +117,10 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             set
             {
                 if (SetProperty(ref _searchQuery, value))
+                {
+                    _vmMain.NetSourceSearchQuery = value;
                     RefreshSearch();
+                }
             }
         }
         private string? _searchQuery;
@@ -127,6 +133,20 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             set => SetProperty(ref _statusText, value);
         }
         private string _statusText = string.Empty;
+
+        public bool ShowUpdateLocalFiles
+        {
+            get => _showUpdateLocalFiles;
+            private set => SetProperty(ref _showUpdateLocalFiles, value);
+        }
+        private bool _showUpdateLocalFiles;
+
+        public bool ShowRemoveLocalFiles
+        {
+            get => _showRemoveLocalFiles;
+            private set => SetProperty(ref _showRemoveLocalFiles, value);
+        }
+        private bool _showRemoveLocalFiles;
 
         public string? ActiveSortKey
         {
@@ -142,8 +162,11 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         }
         private bool _sortDescending;
 
-        private void RefreshSearch()
+        private void RefreshSearch(bool resetSort = false)
         {
+            if (resetSort)
+                ResetSortState();
+
             IReadOnlyCollection<string>? filterIds = null;
             if (!_aggregateSearch && _selectedRepo is not null)
                 filterIds = [_selectedRepo.Config.RepoId];
@@ -154,19 +177,30 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
             var results = _searchService.Search(_caches, _repoDisplayNames, repoOrder, _searchQuery, filterIds, SearchResultLimit);
 
-            SearchResults.ReplaceAll(results.Select(r => new NetSourceBundleItemViewModel(r)));
+            SearchResults.ReplaceAll(results.Select(r =>
+            {
+                var localInfo = HasToken
+                    ? _downloadService.GetBundleInfo(r.RepoId, r.Bundle, r.CommitSha)
+                    : new LocalBundleInfo(DownloadedBundleState.None, null);
+                var item = new NetSourceBundleItemViewModel(r)
+                {
+                    LocalState = localInfo.State,
+                    LocalUpdatedAt = localInfo.UpdatedAt
+                };
+                return item;
+            }));
 
-            ActiveSortKey = null;
-            SortDescending = false;
+            if (!string.IsNullOrEmpty(ActiveSortKey))
+                ApplySort();
 
             var totalBundles = _caches.Values.Sum(c => c?.Bundles?.Count ?? 0);
-            StatusText = $"共 {totalBundles} 个模型 · 当前显示 {SearchResults.Count} 条";
+            StatusText = string.Format(Str("Str_NetSourceStatusSummary"), totalBundles, SearchResults.Count);
         }
 
         public void SortByColumn(string columnKey)
         {
             if (string.IsNullOrEmpty(columnKey)) return;
-            if (columnKey != SortKeyRepo && columnKey != SortKeySize && columnKey != SortKeyFileCount && columnKey != SortKeyCommitDate) return;
+            if (!IsSortKeySupported(columnKey)) return;
 
             if (string.Equals(ActiveSortKey, columnKey, StringComparison.Ordinal))
             {
@@ -177,7 +211,30 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 ActiveSortKey = columnKey;
                 SortDescending = false;
             }
+            PersistSearchState();
             ApplySort();
+        }
+
+        private void ResetSortState()
+        {
+            ActiveSortKey = null;
+            SortDescending = false;
+            PersistSearchState();
+        }
+
+        private void PersistSearchState()
+        {
+            _vmMain.NetSourceSearchQuery = SearchQuery;
+            _vmMain.NetSourceSortKey = ActiveSortKey;
+            _vmMain.NetSourceSortDescending = SortDescending;
+        }
+
+        private static bool IsSortKeySupported(string? sortKey)
+        {
+            return sortKey == SortKeyRepo
+                || sortKey == SortKeySize
+                || sortKey == SortKeyFileCount
+                || sortKey == SortKeyCommitDate;
         }
 
         private void ApplySort()
@@ -205,6 +262,28 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             SearchResults.ReplaceAll(ordered);
         }
 
+        public void UpdateResultContextMenuState(IList? args)
+        {
+            var state = GetUniformHighlightedState(args);
+            ShowUpdateLocalFiles = state == DownloadedBundleState.Outdated;
+            ShowRemoveLocalFiles = state is DownloadedBundleState.Current or DownloadedBundleState.Outdated;
+            _cmd_UpdateLocalFiles?.NotifyCanExecuteChanged();
+            _cmd_RemoveLocalFiles?.NotifyCanExecuteChanged();
+        }
+
+        private static DownloadedBundleState? GetUniformHighlightedState(IList? args)
+        {
+            var items = args?.OfType<NetSourceBundleItemViewModel>().ToArray() ?? [];
+            if (items.Length == 0)
+                return null;
+
+            var state = items[0].LocalState;
+            if (state is not (DownloadedBundleState.Current or DownloadedBundleState.Outdated))
+                return null;
+
+            return items.All(it => it.LocalState == state) ? state : null;
+        }
+
         #endregion
 
         #region 仓库管理命令
@@ -221,7 +300,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             var parsed = GitHubApiClient.TryParseRepoUrl(input);
             if (parsed is null)
             {
-                MessagePopupService.Warn("无法识别仓库地址, 支持格式: https://github.com/owner/repo 或 owner/repo");
+                MessagePopupService.Warn(Str("Str_NetSourceInvalidRepoUrl"));
                 return;
             }
 
@@ -236,7 +315,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
             if (IsDuplicateRepo(cfg))
             {
-                MessagePopupService.Info("该仓库已添加");
+                MessagePopupService.Info(Str("Str_NetSourceRepoAlreadyAdded"));
                 return;
             }
 
@@ -264,14 +343,14 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         public RelayCommand<NetSourceRepoItemViewModel?> Cmd_RefreshRepo => _cmd_RefreshRepo ??= new(item =>
         {
             if (!CanRefreshRepo(item)) return;
-            _ = RefreshRepoAsync(item, forceFull: true);
+            _ = RefreshRepoAsync(item, forceFull: false, resetSort: true);
         }, CanRefreshRepo);
         private RelayCommand<NetSourceRepoItemViewModel?>? _cmd_RefreshRepo;
 
         public RelayCommand<NetSourceRepoItemViewModel?> Cmd_RemoveRepo => _cmd_RemoveRepo ??= new(item =>
         {
             if (!CanRemoveRepo(item)) return;
-            if (!MessagePopupService.OKCancel($"确定要移除仓库 {item.DisplayName} 及其本地缓存吗?"))
+            if (!MessagePopupService.OKCancel(string.Format(Str("Str_NetSourceRemoveRepoQuest"), item.DisplayName)))
                 return;
 
             Repos.Remove(item);
@@ -317,7 +396,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             {
                 _logger.Debug(ex.ToString());
                 _logger.Error("Failed to open repo url {0}: {1}", item.WebUrl, ex.Message);
-                MessagePopupService.Warn("无法打开浏览器: " + ex.Message);
+                MessagePopupService.Warn(string.Format(Str("Str_NetSourceOpenBrowserFailed"), ex.Message));
             }
         }, CanUseRepo);
         private RelayCommand<NetSourceRepoItemViewModel?>? _cmd_VisitRepoUrl;
@@ -369,7 +448,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             foreach (var item in Repos.ToArray())
             {
                 if (!CanRefreshRepo(item)) continue;
-                _ = RefreshRepoAsync(item, forceFull: true);
+                _ = RefreshRepoAsync(item, forceFull: false, resetSort: true);
             }
         });
         private RelayCommand? _cmd_RefreshAll;
@@ -383,6 +462,12 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
         public RelayCommand<IList?> Cmd_SaveAs => _cmd_SaveAs ??= new(SaveAs_Execute, args => args is not null && args.Count > 0);
         private RelayCommand<IList?>? _cmd_SaveAs;
+
+        public RelayCommand<IList?> Cmd_UpdateLocalFiles => _cmd_UpdateLocalFiles ??= new(UpdateLocalFiles_Execute, CanUpdateLocalFiles);
+        private RelayCommand<IList?>? _cmd_UpdateLocalFiles;
+
+        public RelayCommand<IList?> Cmd_RemoveLocalFiles => _cmd_RemoveLocalFiles ??= new(RemoveLocalFiles_Execute, CanRemoveLocalFiles);
+        private RelayCommand<IList?>? _cmd_RemoveLocalFiles;
 
         private void SaveAs_Execute(IList? args)
         {
@@ -402,7 +487,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 var localDir = saveToSelectedDir
                     ? targetDir!
                     : System.IO.Path.Combine(targetDir!, SanitizeName(it.Bundle.ModelName));
-                reqs.Add(new BundleDownloadRequest(cfg, it.Bundle, it.Result.CommitSha, localDir));
+                reqs.Add(new BundleDownloadRequest(cfg, it.Bundle, it.Result.CommitSha, localDir, TrackInLibrary: false));
             }
             if (reqs.Count == 0) return;
 
@@ -414,7 +499,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token);
                 SaveAsTask(reqs, reporter, linked.Token);
-            }, "保存到本地");
+            }, Str("Str_NetSourceSaveAsTitle"));
         }
 
         private void SaveAsTask(List<BundleDownloadRequest> reqs, IProgressReporter reporter, CancellationToken ct)
@@ -467,20 +552,13 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 _logger.Info("Save-as finished: {0} bundle(s) saved to disk", success);
         }
 
-        private static string SanitizeName(string name)
-        {
-            if (string.IsNullOrWhiteSpace(name)) return "bundle";
-            var invalid = System.IO.Path.GetInvalidFileNameChars();
-            var sb = new System.Text.StringBuilder(name.Length);
-            foreach (var c in name) sb.Append(System.Array.IndexOf(invalid, c) >= 0 ? '_' : c);
-            return sb.ToString();
-        }
+        private bool CanUpdateLocalFiles(IList? args)
+            => GetUniformHighlightedState(args) == DownloadedBundleState.Outdated;
 
-        private void DownloadAndImport_Execute(IList? args)
+        private void UpdateLocalFiles_Execute(IList? args)
         {
-            if (args is null || args.Count <= 0) return;
-            var items = args.OfType<NetSourceBundleItemViewModel>().ToArray();
-            if (items.Length == 0) return;
+            if (!CanUpdateLocalFiles(args)) return;
+            var items = args!.OfType<NetSourceBundleItemViewModel>().ToArray();
 
             var reqs = new List<BundleDownloadRequest>();
             foreach (var it in items)
@@ -488,7 +566,13 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 var cfg = Repos.FirstOrDefault(r => r.Config.RepoId == it.Result.RepoId)?.Config;
                 if (cfg is null) continue;
                 var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Result.CommitSha, it.Bundle.BundleDir);
-                reqs.Add(new BundleDownloadRequest(cfg, it.Bundle, it.Result.CommitSha, localDir));
+                reqs.Add(new BundleDownloadRequest(
+                    cfg,
+                    it.Bundle,
+                    it.Result.CommitSha,
+                    localDir,
+                    TrackInLibrary: true,
+                    OverwriteExisting: true));
             }
             if (reqs.Count == 0) return;
 
@@ -499,19 +583,187 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             ProgressService.RunAsync((reporter, ct) =>
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token);
-                DownloadAndImportTask(reqs, reporter, linked.Token);
-            }, "下载模型……");
+                UpdateLocalFilesTask(reqs, reporter, linked.Token);
+            }, Str("Str_NetSourceUpdateFilesTitle"));
+        }
+
+        private void UpdateLocalFilesTask(List<BundleDownloadRequest> reqs, IProgressReporter reporter, CancellationToken ct)
+        {
+            int totalBundles = reqs.Count;
+            int successBundle = 0;
+            int failedBundle = 0;
+
+            _vmMain.ProgressState = TaskbarItemProgressState.Normal;
+            _vmMain.ProgressValue = 0;
+            reporter.Total = totalBundles;
+            reporter.Done = 0;
+            reporter.ProgressText = $"[0/{totalBundles}]";
+
+            for (int i = 0; i < totalBundles; i++)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                var req = reqs[i];
+                reporter.ProgressText = $"[{i}/{totalBundles}] {req.Bundle.ModelName}";
+
+                try
+                {
+                    var fileProgress = new Progress<BundleDownloadProgress>(p =>
+                    {
+                        reporter.ProgressText = $"[{i + 1}/{totalBundles}] {req.Bundle.ModelName}  ·  {p.CurrentFile} ({p.CompletedFiles}/{p.TotalFiles})";
+                    });
+
+                    _downloadService.DownloadAsync(req, fileProgress, ct).GetAwaiter().GetResult();
+                    successBundle++;
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Info("GitHub repo file update canceled at {0}", req.Bundle.ModelName);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex.ToString());
+                    _logger.Error("Failed to update GitHub repo files for {0}: {1}", req.Bundle.ModelName, ex.Message);
+                    failedBundle++;
+                }
+
+                reporter.Done = i + 1;
+                _vmMain.ProgressValue = (i + 1f) / totalBundles;
+            }
+
+            _vmMain.ProgressState = TaskbarItemProgressState.None;
+
+            Application.Current.Dispatcher.Invoke(() => RefreshSearch());
+
+            if (failedBundle > 0)
+                _logger.Warn("GitHub repo file update finished: {0} success, {1} failed", successBundle, failedBundle);
+            else
+                _logger.Info("GitHub repo file update finished: {0} bundle(s) updated", successBundle);
+        }
+
+        private bool CanRemoveLocalFiles(IList? args)
+            => GetUniformHighlightedState(args) is DownloadedBundleState.Current or DownloadedBundleState.Outdated;
+
+        private void RemoveLocalFiles_Execute(IList? args)
+        {
+            if (!CanRemoveLocalFiles(args)) return;
+            var items = args!.OfType<NetSourceBundleItemViewModel>().ToArray();
+            if (!MessagePopupService.OKCancel(string.Format(Str("Str_NetSourceRemoveLocalFilesQuest"), items.Length)))
+                return;
+
+            int removedFiles = 0;
+            int failedBundles = 0;
+            int unloadedModels = 0;
+            var repoDownloadsRoot = NetSourcePathProvider.GetReposRoot(_cacheRoot);
+            foreach (var it in items)
+            {
+                try
+                {
+                    var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, it.Result.RepoId, it.Result.CommitSha, it.Bundle.BundleDir);
+                    var localSkelPath = System.IO.Path.Combine(localDir, GetRepoFileName(it.Bundle.SkelPath));
+                    unloadedModels += _vmMain.SpineObjectListViewModel.RemoveLoadedSpineObjectFromPathIfUnderRoot(localSkelPath, repoDownloadsRoot);
+                    removedFiles += _downloadService.RemoveLocalFiles(it.Result.RepoId, it.Bundle, it.Result.CommitSha);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex.ToString());
+                    _logger.Error("Failed to remove GitHub repo local files for {0}: {1}", it.ModelName, ex.Message);
+                    failedBundles++;
+                }
+            }
+
+            RefreshSearch();
+
+            if (failedBundles > 0)
+                _logger.Warn("GitHub repo local file removal finished: {0} file(s) removed, {1} loaded model(s) unloaded, {2} bundle(s) failed", removedFiles, unloadedModels, failedBundles);
+            else
+                _logger.Info("GitHub repo local file removal finished: {0} file(s) removed, {1} loaded model(s) unloaded", removedFiles, unloadedModels);
+        }
+
+        private static string SanitizeName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "bundle";
+            var invalid = System.IO.Path.GetInvalidFileNameChars();
+            var sb = new System.Text.StringBuilder(name.Length);
+            foreach (var c in name) sb.Append(System.Array.IndexOf(invalid, c) >= 0 ? '_' : c);
+            return sb.ToString();
+        }
+
+        private static string GetRepoFileName(string repoPath)
+        {
+            var idx = repoPath.LastIndexOf('/');
+            return idx < 0 ? repoPath : repoPath[(idx + 1)..];
+        }
+
+        private void DownloadAndImport_Execute(IList? args)
+        {
+            if (args is null || args.Count <= 0) return;
+            var items = args.OfType<NetSourceBundleItemViewModel>().ToArray();
+            if (items.Length == 0) return;
+
+            var reqs = new List<BundleDownloadRequest>();
+            var localSkelPaths = new List<string>();
+            foreach (var it in items)
+            {
+                var cfg = Repos.FirstOrDefault(r => r.Config.RepoId == it.Result.RepoId)?.Config;
+                if (cfg is null) continue;
+
+                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Result.CommitSha, it.Bundle.BundleDir);
+                var localTargetSkelPath = System.IO.Path.Combine(localDir, GetRepoFileName(it.Bundle.SkelPath));
+                if (_vmMain.SpineObjectListViewModel.TrySelectLoadedSpineObject(localTargetSkelPath))
+                    continue;
+
+                var localInfo = HasToken
+                    ? _downloadService.GetBundleInfo(it.Result.RepoId, it.Bundle, it.Result.CommitSha)
+                    : new LocalBundleInfo(DownloadedBundleState.None, null);
+                var localState = localInfo.State;
+                it.LocalState = localState;
+                it.LocalUpdatedAt = localInfo.UpdatedAt;
+                if (HasToken
+                    && localState == DownloadedBundleState.Current
+                    && _downloadService.TryGetLocalSkelPath(it.Result.RepoId, it.Bundle, it.Result.CommitSha, out var localSkelPath))
+                {
+                    localSkelPaths.Add(localSkelPath);
+                    continue;
+                }
+
+                reqs.Add(new BundleDownloadRequest(
+                    cfg,
+                    it.Bundle,
+                    it.Result.CommitSha,
+                    localDir,
+                    TrackInLibrary: true,
+                    OverwriteExisting: !HasToken || localState == DownloadedBundleState.Outdated));
+            }
+            if (reqs.Count == 0)
+            {
+                if (localSkelPaths.Count > 0)
+                    _vmMain.SpineObjectListViewModel.AddSpineObjectFromFileList(localSkelPaths);
+                return;
+            }
+
+            _downloadCts?.Cancel();
+            _downloadCts = new CancellationTokenSource();
+            var token = _downloadCts.Token;
+
+            ProgressService.RunAsync((reporter, ct) =>
+            {
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token);
+                DownloadAndImportTask(reqs, localSkelPaths, reporter, linked.Token);
+            }, Str("Str_NetSourceDownloadTitle"));
         }
 
         private void DownloadAndImportTask(
             List<BundleDownloadRequest> reqs,
+            List<string> localSkelPaths,
             IProgressReporter reporter,
             CancellationToken ct)
         {
             int totalBundles = reqs.Count;
             int successBundle = 0;
             int failedBundle = 0;
-            var downloadedSkelPaths = new List<string>();
+            var downloadedSkelPaths = new List<string>(localSkelPaths);
 
             _vmMain.ProgressState = TaskbarItemProgressState.Normal;
             _vmMain.ProgressValue = 0;
@@ -560,13 +812,14 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     _vmMain.SpineObjectListViewModel.AddSpineObjectFromFileList(downloadedSkelPaths);
+                    RefreshSearch();
                 });
             }
 
             if (failedBundle > 0)
-                _logger.Warn("Net source download finished: {0} success, {1} failed", successBundle, failedBundle);
+                _logger.Warn("GitHub repo download finished: {0} success, {1} failed", successBundle, failedBundle);
             else
-                _logger.Info("Net source download finished: {0} bundle(s) imported", successBundle);
+                _logger.Info("GitHub repo download finished: {0} bundle(s) imported", successBundle);
         }
 
         #endregion
@@ -597,7 +850,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             }
         }
 
-        private async Task RefreshRepoAsync(NetSourceRepoItemViewModel item, bool forceFull)
+        private async Task RefreshRepoAsync(NetSourceRepoItemViewModel item, bool forceFull, bool resetSort = false)
         {
             item.Status = RepoIndexStatus.Indexing;
             item.ErrorMessage = null;
@@ -626,7 +879,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                     item.Truncated = cache.Truncated;
                     item.Status = cache.Truncated ? RepoIndexStatus.Stale : RepoIndexStatus.Ready;
                     PersistRepoList();
-                    RefreshSearch();
+                    RefreshSearch(resetSort: resetSort);
                     NotifyRepoCommandStates();
                 });
             }
@@ -667,10 +920,15 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             _vmMain.SaveNetSourceRepoConfigs();
         }
 
+        private static string Str(string key)
+            => Application.Current.TryFindResource(key) as string ?? key;
+
         #endregion
 
         public void Dispose()
         {
+            PersistSearchState();
+            _vmMain.SaveNetSourceState();
             _indexCts.Cancel();
             _indexCts.Dispose();
             _downloadCts?.Cancel();
