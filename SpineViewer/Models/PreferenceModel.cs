@@ -135,6 +135,15 @@ namespace SpineViewer.Models
         [property: JsonIgnore]
         private string? _gitHubAccessToken;
 
+        [ObservableProperty]
+        private bool _netSourceUseProxy;
+
+        [ObservableProperty]
+        private string _netSourceProxyHost = "127.0.0.1";
+
+        [ObservableProperty]
+        private int _netSourceProxyPort = 7890;
+
         public RelayCommand Cmd_SelectNetSourceCacheRoot => _cmd_SelectNetSourceCacheRoot ??= new(() =>
         {
             if (DialogService.ShowOpenFolderDialog(out var folder) && !string.IsNullOrWhiteSpace(folder))

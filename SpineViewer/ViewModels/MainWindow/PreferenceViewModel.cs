@@ -124,6 +124,9 @@ namespace SpineViewer.ViewModels.MainWindow
 
                     NetSourceCacheRoot = NetSourceCacheRoot,
                     GitHubAccessToken = GitHubAccessToken,
+                    NetSourceUseProxy = NetSourceUseProxy,
+                    NetSourceProxyHost = NetSourceProxyHost,
+                    NetSourceProxyPort = NetSourceProxyPort,
                 };
             }
             set
@@ -163,6 +166,9 @@ namespace SpineViewer.ViewModels.MainWindow
                 NetSourceCacheRoot = value.NetSourceCacheRoot;
                 if (value.GitHubAccessToken is not null)
                     GitHubAccessToken = value.GitHubAccessToken;
+                NetSourceUseProxy = value.NetSourceUseProxy;
+                NetSourceProxyHost = value.NetSourceProxyHost;
+                NetSourceProxyPort = value.NetSourceProxyPort;
             }
         }
 
@@ -373,6 +379,27 @@ namespace SpineViewer.ViewModels.MainWindow
                 OnPropertyChanged();
             }
         }
+
+        public bool NetSourceUseProxy
+        {
+            get => _netSourceUseProxy;
+            set => SetProperty(ref _netSourceUseProxy, value);
+        }
+        private bool _netSourceUseProxy;
+
+        public string NetSourceProxyHost
+        {
+            get => _netSourceProxyHost;
+            set => SetProperty(ref _netSourceProxyHost, string.IsNullOrWhiteSpace(value) ? "127.0.0.1" : value.Trim());
+        }
+        private string _netSourceProxyHost = "127.0.0.1";
+
+        public int NetSourceProxyPort
+        {
+            get => _netSourceProxyPort;
+            set => SetProperty(ref _netSourceProxyPort, Math.Clamp(value, 1, 65535));
+        }
+        private int _netSourceProxyPort = 7890;
 
         #endregion
     }

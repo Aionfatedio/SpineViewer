@@ -332,6 +332,45 @@
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="LabelCol"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
+                                <Label Content="{DynamicResource Str_NetSourceUseProxy}"
+                                       ToolTip="{DynamicResource Str_NetSourceUseProxyTooltip}"/>
+                                <ToggleButton Grid.Column="1"
+                                              IsChecked="{Binding NetSourceUseProxy}"
+                                              ToolTip="{DynamicResource Str_NetSourceUseProxyTooltip}"/>
+                            </Grid>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="LabelCol"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Content="{DynamicResource Str_NetSourceProxyAddress}"
+                                       IsEnabled="{Binding NetSourceUseProxy}"
+                                       ToolTip="{DynamicResource Str_NetSourceProxyAddressTooltip}"/>
+                                <Grid Grid.Column="1"
+                                      IsEnabled="{Binding NetSourceUseProxy}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="90"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding NetSourceProxyHost, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="{DynamicResource Str_NetSourceProxyAddressTooltip}"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text=":"
+                                               Margin="6 0"
+                                               VerticalAlignment="Center"/>
+                                    <TextBox Grid.Column="2"
+                                             Text="{Binding NetSourceProxyPort, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="{DynamicResource Str_NetSourceProxyAddressTooltip}"/>
+                                </Grid>
+                            </Grid>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="LabelCol"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
                                 <Label Content="{DynamicResource Str_NetSourceCacheRoot}"
                                        ToolTip="{DynamicResource Str_NetSourceCacheRootTooltip}"/>
                                 <DockPanel Grid.Column="1">

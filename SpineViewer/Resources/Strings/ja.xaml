@@ -320,13 +320,17 @@
     <s:String x:Key="Str_NetSourceRemoveLocalFilesQuest">選択した {0} 個のモデルのローカルファイルを削除しますか?</s:String>
     <s:String x:Key="Str_NetSourceSaveAs">名前を付けて保存</s:String>
     <s:String x:Key="Str_NetSourceClose">閉じる</s:String>
-    <s:String x:Key="Str_NetSourcePreference">GitHub リポジトリ読み込みオプション</s:String>
+    <s:String x:Key="Str_NetSourcePreference">リポジトリ読み込みオプション</s:String>
     <s:String x:Key="Str_NetSourceCacheRoot">キャッシュディレクトリ</s:String>
     <s:String x:Key="Str_NetSourceCacheRootTooltip">GitHub リポジトリのリソースルート。資格情報と汎用キャッシュは netcache、モデルとモデルインデックスは Spine に保存します。</s:String>
     <s:String x:Key="Str_NetSourceCacheRootReset">リセット</s:String>
     <s:String x:Key="Str_NetSourceCacheRootHint">空欄なら既定 (プログラム階層\Resources) を使用</s:String>
     <s:String x:Key="Str_NetSourceGitHubToken">GitHub アクセストークン</s:String>
     <s:String x:Key="Str_NetSourceGitHubTokenTooltip">任意。GitHub API のレート制限を緩和します (匿名 60/h → 認証 5000/h)。DPAPI で暗号化保存され、preference.json には書き込まれません。</s:String>
+    <s:String x:Key="Str_NetSourceUseProxy">プロキシを使用</s:String>
+    <s:String x:Key="Str_NetSourceUseProxyTooltip">リポジトリ読み込みの通信にのみ使用します。オフの場合は既定のネットワーク設定を使用します。</s:String>
+    <s:String x:Key="Str_NetSourceProxyAddress">プロキシアドレス</s:String>
+    <s:String x:Key="Str_NetSourceProxyAddressTooltip">プロキシのホストとポート。既定は 127.0.0.1:7890 です。</s:String>
 
 </ResourceDictionary>
 

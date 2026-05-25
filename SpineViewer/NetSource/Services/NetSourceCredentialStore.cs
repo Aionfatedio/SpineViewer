@@ -8,6 +8,7 @@ using System.Text.Json;
 
 namespace SpineViewer.NetSource.Services
 {
+    // PAT 不写入 preference.json，而是通过 DPAPI 绑定当前 Windows 用户后保存到 netcache。
     public class NetSourceCredentialStore
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -48,7 +49,7 @@ namespace SpineViewer.NetSource.Services
         {
             try
             {
-                NetSourcePathProvider.EnsureDirectoryExists(_cacheRoot);
+                NetSourcePathProvider.EnsureDirectoryExists(Path.GetDirectoryName(NetSourcePathProvider.GetCredentialsFilePath(_cacheRoot))!);
                 var json = JsonSerializer.Serialize(credentials);
                 var plaintext = Encoding.UTF8.GetBytes(json);
                 var ciphertext = ProtectedData.Protect(plaintext, _entropy, DataProtectionScope.CurrentUser);

@@ -320,12 +320,16 @@
     <s:String x:Key="Str_NetSourceRemoveLocalFilesQuest">确定移除所选 {0} 个模型的本地文件?</s:String>
     <s:String x:Key="Str_NetSourceSaveAs">另存为</s:String>
     <s:String x:Key="Str_NetSourceClose">关闭</s:String>
-    <s:String x:Key="Str_NetSourcePreference">GitHub 仓库导入选项</s:String>
+    <s:String x:Key="Str_NetSourcePreference">仓库导入选项</s:String>
     <s:String x:Key="Str_NetSourceCacheRoot">缓存目录</s:String>
     <s:String x:Key="Str_NetSourceCacheRootTooltip">GitHub 仓库资源根目录；凭证等缓存保存至 netcache，模型与模型索引保存至 Spine</s:String>
     <s:String x:Key="Str_NetSourceCacheRootReset">重置</s:String>
     <s:String x:Key="Str_NetSourceCacheRootHint">留空使用默认 (程序目录/Resources)</s:String>
     <s:String x:Key="Str_NetSourceGitHubToken">GitHub 访问令牌</s:String>
     <s:String x:Key="Str_NetSourceGitHubTokenTooltip">可选, 提高 GitHub API 速率限制</s:String>
+    <s:String x:Key="Str_NetSourceUseProxy">启用代理</s:String>
+    <s:String x:Key="Str_NetSourceUseProxyTooltip">仅用于仓库导入请求；关闭时使用系统默认网络设置</s:String>
+    <s:String x:Key="Str_NetSourceProxyAddress">代理地址</s:String>
+    <s:String x:Key="Str_NetSourceProxyAddressTooltip">代理主机和端口, 默认 127.0.0.1:7890</s:String>
 
 </ResourceDictionary>

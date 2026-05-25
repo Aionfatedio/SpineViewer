@@ -320,12 +320,16 @@
     <s:String x:Key="Str_NetSourceRemoveLocalFilesQuest">Remove local files for the selected {0} model(s)?</s:String>
     <s:String x:Key="Str_NetSourceSaveAs">Save As</s:String>
     <s:String x:Key="Str_NetSourceClose">Close</s:String>
-    <s:String x:Key="Str_NetSourcePreference">GitHub Repo Loader Options</s:String>
+    <s:String x:Key="Str_NetSourcePreference">Repository Loader Options</s:String>
     <s:String x:Key="Str_NetSourceCacheRoot">Cache Directory</s:String>
     <s:String x:Key="Str_NetSourceCacheRootTooltip">GitHub repo resource root; credentials and general cache go to netcache, models and model indexes go to Spine.</s:String>
     <s:String x:Key="Str_NetSourceCacheRootReset">Reset</s:String>
     <s:String x:Key="Str_NetSourceCacheRootHint">Leave empty to use default (program directory\Resources)</s:String>
     <s:String x:Key="Str_NetSourceGitHubToken">GitHub Access Token</s:String>
     <s:String x:Key="Str_NetSourceGitHubTokenTooltip">Optional, raises GitHub API rate limit (60/h anonymous → 5000/h authenticated). Stored encrypted via DPAPI and never written to preference.json.</s:String>
+    <s:String x:Key="Str_NetSourceUseProxy">Use Proxy</s:String>
+    <s:String x:Key="Str_NetSourceUseProxyTooltip">Only applies to repository loader requests. When off, the app uses the default network settings.</s:String>
+    <s:String x:Key="Str_NetSourceProxyAddress">Proxy Address</s:String>
+    <s:String x:Key="Str_NetSourceProxyAddressTooltip">Proxy host and port, default 127.0.0.1:7890.</s:String>
 
 </ResourceDictionary>

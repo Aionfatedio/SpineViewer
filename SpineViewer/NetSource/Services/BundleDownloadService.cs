@@ -33,6 +33,8 @@ namespace SpineViewer.NetSource.Services
 
     public record LocalBundleInfo(DownloadedBundleState State, DateTime? UpdatedAt);
 
+    // 下载服务负责把索引中的 bundle 落到 Resources/Spine/repos，并维护本地文件索引。
+    // ViewModel 只根据返回的本地 skel 路径决定是否载入，不在这里耦合 UI 或渲染状态。
     public class BundleDownloadService
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -61,6 +63,8 @@ namespace SpineViewer.NetSource.Services
             IProgress<BundleDownloadProgress>? progress,
             CancellationToken ct)
         {
+            // 文件列表完全来自 RepoIndexService 的 bundle 结果；atlas 内容不在下载阶段改写，
+            // 避免 webp/jpg 仓库被错误替换成 png 引用。
             var b = req.Bundle;
             var commit = req.CommitSha;
 
@@ -73,8 +77,8 @@ namespace SpineViewer.NetSource.Services
             AddJob(b.SkelPath);
             if (!string.IsNullOrEmpty(b.AtlasPath))
                 AddJob(b.AtlasPath!);
-            foreach (var png in b.PngPaths)
-                AddJob(png);
+            foreach (var texture in b.TexturePaths)
+                AddJob(texture);
 
             NetSourcePathProvider.EnsureDirectoryExists(req.LocalBundleDir);
 
@@ -165,6 +169,7 @@ namespace SpineViewer.NetSource.Services
 
         public LocalBundleInfo GetBundleInfo(string repoId, SpineBundle bundle, string commitSha)
         {
+            // 高亮状态同时检查索引和实际文件是否存在。索引匹配但文件缺失时按未下载处理。
             var index = LoadDownloadIndex(repoId);
             var key = BuildBundleKey(bundle);
             var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, commitSha, bundle.BundleDir);
@@ -203,6 +208,7 @@ namespace SpineViewer.NetSource.Services
         {
             lock (_downloadIndexLock)
             {
+                // 删除时先从下载索引移除目标，再保护仍被其他 bundle 引用的共享纹理文件。
                 var index = LoadDownloadIndex(repoId);
                 var key = BuildBundleKey(bundle);
                 index.Bundles.TryGetValue(key, out var entry);
@@ -280,8 +286,8 @@ namespace SpineViewer.NetSource.Services
 
             Add(bundle.SkelPath);
             Add(bundle.AtlasPath);
-            foreach (var png in bundle.PngPaths)
-                Add(png);
+            foreach (var texture in bundle.TexturePaths)
+                Add(texture);
             return paths;
         }
 
@@ -296,8 +302,8 @@ namespace SpineViewer.NetSource.Services
 
             Add(entry.SkelPath);
             Add(entry.AtlasPath);
-            foreach (var png in entry.PngPaths)
-                Add(png);
+            foreach (var texture in entry.TexturePaths)
+                Add(texture);
             return paths;
         }
 
@@ -340,6 +346,7 @@ namespace SpineViewer.NetSource.Services
         {
             lock (_downloadIndexLock)
             {
+                // 本地索引保存的是当前下载时的 bundle 指纹，用于后续蓝色/黄色状态判断。
                 var index = LoadDownloadIndex(req.RepoConfig.RepoId);
                 index.Bundles[BuildBundleKey(req.Bundle)] = new DownloadIndexEntry
                 {
@@ -347,7 +354,7 @@ namespace SpineViewer.NetSource.Services
                     ModelName = req.Bundle.ModelName,
                     SkelPath = req.Bundle.SkelPath,
                     AtlasPath = req.Bundle.AtlasPath,
-                    PngPaths = req.Bundle.PngPaths.ToList(),
+                    TexturePaths = req.Bundle.TexturePaths.ToList(),
                     BundleHash = req.Bundle.BundleHash,
                     TotalSize = req.Bundle.TotalSize,
                     FileCount = req.Bundle.FileCount,
@@ -383,7 +390,7 @@ namespace SpineViewer.NetSource.Services
                 && string.Equals(entry.AtlasPath ?? string.Empty, bundle.AtlasPath ?? string.Empty, StringComparison.Ordinal)
                 && entry.FileCount == bundle.FileCount
                 && entry.TotalSize == bundle.TotalSize
-                && TexturePathSetEquals(entry.PngPaths, bundle.PngPaths);
+                && TexturePathSetEquals(entry.TexturePaths, bundle.TexturePaths);
         }
 
         private static bool TexturePathSetEquals(IReadOnlyCollection<string> left, IReadOnlyCollection<string> right)
@@ -397,7 +404,7 @@ namespace SpineViewer.NetSource.Services
             if (string.IsNullOrWhiteSpace(localDir) || !Directory.Exists(localDir)) return false;
             if (string.IsNullOrEmpty(bundle.SkelPath) || !File.Exists(Path.Combine(localDir, GetFileName(bundle.SkelPath)))) return false;
             if (!string.IsNullOrEmpty(bundle.AtlasPath) && !File.Exists(Path.Combine(localDir, GetFileName(bundle.AtlasPath!)))) return false;
-            return bundle.PngPaths.All(p => File.Exists(Path.Combine(localDir, GetFileName(p))));
+            return bundle.TexturePaths.All(p => File.Exists(Path.Combine(localDir, GetFileName(p))));
         }
 
         private static DateTime? ParseIso(string? raw)
@@ -419,7 +426,7 @@ namespace SpineViewer.NetSource.Services
             public string ModelName { get; set; } = string.Empty;
             public string SkelPath { get; set; } = string.Empty;
             public string? AtlasPath { get; set; }
-            public List<string> PngPaths { get; set; } = [];
+            public List<string> TexturePaths { get; set; } = [];
             public string? BundleHash { get; set; }
             public long TotalSize { get; set; }
             public int FileCount { get; set; }

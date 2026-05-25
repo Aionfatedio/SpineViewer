@@ -3,6 +3,8 @@ using System.IO;
 
 namespace SpineViewer.NetSource.Services
 {
+    // 网络源的路径约定集中在这里，避免下载、索引和凭证代码各自拼路径。
+    // Resources/netcache 保存通用缓存和凭证，Resources/Spine 保存模型文件与模型索引。
     public static class NetSourcePathProvider
     {
         public const string ResourcesFolderName = "Resources";

@@ -14,7 +14,7 @@ namespace SpineViewer.NetSource.Models
 
         public string? AtlasPath { get; set; }
 
-        public List<string> PngPaths { get; set; } = [];
+        public List<string> TexturePaths { get; set; } = [];
 
         public string? BundleHash { get; set; }
 

@@ -32,6 +32,10 @@ namespace SpineViewer.NetSource.Services
 
     public record GitHubRepoRef(string Host, string Owner, string Name, string? Branch);
 
+    public record GitHubProxyOptions(bool Enabled, string Host, int Port);
+
+    // GitHubApiClient 是网络源的最低层封装: URL 解析、REST/GraphQL/raw 请求、
+    // 认证、代理和轻量重试都收敛在这里，避免 ViewModel 直接感知 HTTP 细节。
     public sealed class GitHubApiClient : IDisposable
     {
         private const string ApiBase = "https://api.github.com";
@@ -39,8 +43,10 @@ namespace SpineViewer.NetSource.Services
         private const string GraphQLEndpoint = "https://api.github.com/graphql";
         private const string AcceptHeader = "application/vnd.github+json";
         private const string ApiVersion = "2022-11-28";
+        private const int MaxTransientRetries = 2;
 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly TimeSpan RetryBaseDelay = TimeSpan.FromMilliseconds(400);
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -51,14 +57,21 @@ namespace SpineViewer.NetSource.Services
         private readonly bool _ownsHttp;
         private string? _token;
 
-        public GitHubApiClient(HttpClient? httpClient = null, string? token = null, string userAgent = "SpineViewer")
+        public GitHubApiClient(HttpClient? httpClient = null, string? token = null, string userAgent = "SpineViewer", GitHubProxyOptions? proxy = null)
         {
             if (httpClient is null)
             {
-                _http = new HttpClient(new HttpClientHandler
+                var handler = new HttpClientHandler
                 {
                     AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-                });
+                };
+                if (proxy is { Enabled: true } && !string.IsNullOrWhiteSpace(proxy.Host) && proxy.Port is > 0 and <= 65535)
+                {
+                    handler.Proxy = new WebProxy(proxy.Host, proxy.Port);
+                    handler.UseProxy = true;
+                }
+
+                _http = new HttpClient(handler);
                 _ownsHttp = true;
             }
             else
@@ -197,7 +210,9 @@ namespace SpineViewer.NetSource.Services
 
             try
             {
-                using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+                using var resp = await SendWithRetryAsync(
+                    token => _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token),
+                    ct);
                 if (!resp.IsSuccessStatusCode)
                 {
                     var body = await SafeReadStringAsync(resp.Content, ct);
@@ -239,10 +254,13 @@ namespace SpineViewer.NetSource.Services
         public async Task<string> PostGraphQLAsync(string query, CancellationToken ct = default)
         {
             var payloadJson = JsonSerializer.Serialize(new { query });
-            using var content = new StringContent(payloadJson, System.Text.Encoding.UTF8, "application/json");
             try
             {
-                using var resp = await _http.PostAsync(GraphQLEndpoint, content, ct);
+                using var resp = await SendWithRetryAsync(async token =>
+                {
+                    using var content = new StringContent(payloadJson, System.Text.Encoding.UTF8, "application/json");
+                    return await _http.PostAsync(GraphQLEndpoint, content, token);
+                }, ct);
                 var body = await resp.Content.ReadAsStringAsync(ct);
                 if (!resp.IsSuccessStatusCode)
                     throw new GitHubApiException(resp.StatusCode, FormatError(resp.StatusCode, body, GraphQLEndpoint));
@@ -271,7 +289,9 @@ namespace SpineViewer.NetSource.Services
         {
             try
             {
-                using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+                using var resp = await SendWithRetryAsync(
+                    token => _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token),
+                    ct);
                 var body = await resp.Content.ReadAsStringAsync(ct);
 
                 if (!resp.IsSuccessStatusCode)
@@ -296,6 +316,39 @@ namespace SpineViewer.NetSource.Services
                 throw new GitHubApiException("GitHub request failed: " + ex.Message, ex);
             }
         }
+
+        private static async Task<HttpResponseMessage> SendWithRetryAsync(
+            Func<CancellationToken, Task<HttpResponseMessage>> send,
+            CancellationToken ct)
+        {
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    var resp = await send(ct);
+                    if (!IsTransientStatus(resp.StatusCode) || attempt >= MaxTransientRetries)
+                        return resp;
+
+                    resp.Dispose();
+                }
+                catch (HttpRequestException) when (attempt < MaxTransientRetries)
+                {
+                }
+                catch (TaskCanceledException) when (!ct.IsCancellationRequested && attempt < MaxTransientRetries)
+                {
+                }
+
+                // 只重试网络抖动和 5xx/408，认证、限流和 404 立即返回给上层展示。
+                await Task.Delay(RetryBaseDelay * (attempt + 1), ct);
+            }
+        }
+
+        private static bool IsTransientStatus(HttpStatusCode code)
+            => code is HttpStatusCode.RequestTimeout
+                or HttpStatusCode.InternalServerError
+                or HttpStatusCode.BadGateway
+                or HttpStatusCode.ServiceUnavailable
+                or HttpStatusCode.GatewayTimeout;
 
         private static async Task<string> SafeReadStringAsync(HttpContent content, CancellationToken ct)
         {
