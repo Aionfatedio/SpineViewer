@@ -704,6 +704,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
             var reqs = new List<BundleDownloadRequest>();
             var localSkelPaths = new List<string>();
+            int alreadyLoaded = 0;
             foreach (var it in items)
             {
                 var cfg = Repos.FirstOrDefault(r => r.Config.RepoId == it.Result.RepoId)?.Config;
@@ -712,7 +713,10 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Result.CommitSha, it.Bundle.BundleDir);
                 var localTargetSkelPath = System.IO.Path.Combine(localDir, GetRepoFileName(it.Bundle.SkelPath));
                 if (_vmMain.SpineObjectListViewModel.TrySelectLoadedSpineObject(localTargetSkelPath))
+                {
+                    alreadyLoaded++;
                     continue;
+                }
 
                 var localInfo = HasToken
                     ? _downloadService.GetBundleInfo(it.Result.RepoId, it.Bundle, it.Result.CommitSha)
@@ -741,12 +745,17 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 if (localSkelPaths.Count > 0)
                 {
                     var loadSummary = _vmMain.SpineObjectListViewModel.AddSpineObjectFilesImmediately(localSkelPaths);
+                    var totalAlreadyLoaded = alreadyLoaded + loadSummary.Reused;
                     if (loadSummary.Failed > 0)
                         _logger.Warn("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded, {1} already loaded, {2} load failed",
-                            loadSummary.Loaded, loadSummary.Reused, loadSummary.Failed);
+                            loadSummary.Loaded, totalAlreadyLoaded, loadSummary.Failed);
                     else
                         _logger.Info("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded, {1} already loaded",
-                            loadSummary.Loaded, loadSummary.Reused);
+                            loadSummary.Loaded, totalAlreadyLoaded);
+                }
+                else if (alreadyLoaded > 0)
+                {
+                    _logger.Info("GitHub repo import finished: 0 bundle(s) downloaded, 0 loaded, {0} already loaded", alreadyLoaded);
                 }
                 return;
             }
@@ -758,13 +767,14 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             ProgressService.RunAsync((reporter, ct) =>
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token);
-                DownloadAndImportTask(reqs, localSkelPaths, reporter, linked.Token);
+                DownloadAndImportTask(reqs, localSkelPaths, alreadyLoaded, reporter, linked.Token);
             }, Str("Str_NetSourceDownloadTitle"));
         }
 
         private void DownloadAndImportTask(
             List<BundleDownloadRequest> reqs,
             List<string> localSkelPaths,
+            int alreadyLoaded,
             IProgressReporter reporter,
             CancellationToken ct)
         {
@@ -825,12 +835,13 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 });
             }
 
+            var totalAlreadyLoaded = alreadyLoaded + loadSummary.Reused;
             if (failedBundle > 0 || loadSummary.Failed > 0)
                 _logger.Warn("GitHub repo import finished: {0} bundle(s) downloaded, {1} download failed, {2} loaded, {3} already loaded, {4} load failed",
-                    successBundle, failedBundle, loadSummary.Loaded, loadSummary.Reused, loadSummary.Failed);
+                    successBundle, failedBundle, loadSummary.Loaded, totalAlreadyLoaded, loadSummary.Failed);
             else
                 _logger.Info("GitHub repo import finished: {0} bundle(s) downloaded, {1} loaded, {2} already loaded",
-                    successBundle, loadSummary.Loaded, loadSummary.Reused);
+                    successBundle, loadSummary.Loaded, totalAlreadyLoaded);
         }
 
         #endregion
@@ -846,7 +857,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 {
                     _caches[item.Config.RepoId] = cached;
                     _repoDisplayNames[item.Config.RepoId] = item.DisplayName;
-                    item.Status = RepoIndexStatus.Stale;
+                    item.Status = cached.Truncated ? RepoIndexStatus.Stale : RepoIndexStatus.Ready;
                     item.HeadCommit = cached.HeadCommit;
                     item.HeadCommitDateDisplay = NetSourceRepoItemViewModel.FormatCommitDate(cached.HeadCommitDate);
                     item.BundleCount = cached.Bundles.Count;

@@ -23,6 +23,8 @@ namespace SpineViewer.NetSource.Services
 
         private const int CompareFilesSoftLimit = 300;
 
+        private const int CurrentSchemaVersion = 2;
+
         private static readonly (string Skel, string Atlas)[] _suffixPairs =
         [
             (".skel", ".atlas"),
@@ -35,7 +37,9 @@ namespace SpineViewer.NetSource.Services
             ".png",
             ".webp",
             ".jpg",
-            ".jpeg"
+            ".jpeg",
+            ".bmp",
+            ".tga"
         ];
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -118,7 +122,10 @@ namespace SpineViewer.NetSource.Services
             DateTime? finalDate = TryParseIso(repoInfo.PushedAt) ?? branchCommitDate;
 
             var cached = TryLoadCache(config.RepoId);
-            if (!forceFull && cached is not null && cached.Bundles.Count > 0)
+            if (!forceFull
+                && cached is not null
+                && cached.SchemaVersion == CurrentSchemaVersion
+                && cached.Bundles.Count > 0)
             {
                 if (string.Equals(cached.HeadCommit, headSha, StringComparison.OrdinalIgnoreCase))
                     return await UpdateUnchangedCacheAsync(config, cached, headSha, finalDate, ct, progress);
@@ -302,7 +309,7 @@ namespace SpineViewer.NetSource.Services
         {
             return new RepoIndexCache
             {
-                SchemaVersion = 1,
+                SchemaVersion = CurrentSchemaVersion,
                 RepoId = config.RepoId,
                 Host = config.Host,
                 Owner = config.Owner,
@@ -628,20 +635,21 @@ namespace SpineViewer.NetSource.Services
             var bestMatch = scoredGroups.Max(g => g.BaseMatchCount);
             if (bestMatch > 0)
             {
-                return scoredGroups
+                var matchedFiles = scoredGroups
                     .Where(g => g.BaseMatchCount == bestMatch)
-                    .OrderByDescending(g => g.Files.Count)
-                    .ThenBy(g => GetTextureFormatPriority(g.FormatKey))
-                    .First()
-                    .Files;
+                    .SelectMany(g => g.Files)
+                    .OrderBy(t => t.Path, StringComparer.Ordinal)
+                    .ToList();
+                if (matchedFiles.Count > 0)
+                    return matchedFiles;
             }
 
             if (scoredGroups.Select(g => g.StemKey).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1)
             {
                 return scoredGroups
-                    .OrderBy(g => GetTextureFormatPriority(g.FormatKey))
-                    .First()
-                    .Files;
+                    .SelectMany(g => g.Files)
+                    .OrderBy(t => t.Path, StringComparer.Ordinal)
+                    .ToList();
             }
 
             return validTextures
@@ -686,19 +694,13 @@ namespace SpineViewer.NetSource.Services
         private static string GetTextureFormatKey(string path)
         {
             var lowerName = GetFileName(path).ToLowerInvariant();
-            if (lowerName.EndsWith(".png")) return "png";
-            if (lowerName.EndsWith(".webp")) return "webp";
-            if (lowerName.EndsWith(".jpg") || lowerName.EndsWith(".jpeg")) return "jpg";
+            foreach (var suffix in _textureSuffixes)
+            {
+                if (lowerName.EndsWith(suffix))
+                    return suffix.TrimStart('.');
+            }
             return string.Empty;
         }
-
-        private static int GetTextureFormatPriority(string formatKey) => formatKey switch
-        {
-            "png" => 0,
-            "webp" => 1,
-            "jpg" => 2,
-            _ => 10
-        };
 
         private static string GetTextureStem(string path)
         {

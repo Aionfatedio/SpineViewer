@@ -285,7 +285,7 @@
     <s:String x:Key="Str_NetSourceRepoStatusIndexing">Indexing</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusIndexingProgress">Indexing {0}/{1}</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusReady">Ready</s:String>
-    <s:String x:Key="Str_NetSourceRepoStatusStale">Available (updated)</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusStale">Available (partial)</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusFailed">Failed</s:String>
     <s:String x:Key="Str_NetSourceInvalidRepoUrl">Unable to recognize the repository URL. Supported formats: https://github.com/owner/repo or owner/repo</s:String>
     <s:String x:Key="Str_NetSourceRepoAlreadyAdded">This repository has already been added.</s:String>

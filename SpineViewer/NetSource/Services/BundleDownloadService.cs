@@ -388,7 +388,13 @@ namespace SpineViewer.NetSource.Services
                 && string.Equals(entry.AtlasPath ?? string.Empty, bundle.AtlasPath ?? string.Empty, StringComparison.Ordinal)
                 && entry.FileCount == bundle.FileCount
                 && entry.TotalSize == bundle.TotalSize
-                && entry.PngPaths.SequenceEqual(bundle.PngPaths, StringComparer.Ordinal);
+                && TexturePathSetEquals(entry.PngPaths, bundle.PngPaths);
+        }
+
+        private static bool TexturePathSetEquals(IReadOnlyCollection<string> left, IReadOnlyCollection<string> right)
+        {
+            return left.Count == right.Count
+                && left.ToHashSet(StringComparer.Ordinal).SetEquals(right);
         }
 
         private static bool EntryFilesExist(DownloadIndexEntry entry, string localDir)

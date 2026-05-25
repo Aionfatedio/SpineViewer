@@ -285,7 +285,7 @@
     <s:String x:Key="Str_NetSourceRepoStatusIndexing">インデックス作成中</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusIndexingProgress">インデックス作成中 {0}/{1}</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusReady">準備完了</s:String>
-    <s:String x:Key="Str_NetSourceRepoStatusStale">利用可能 (更新あり)</s:String>
+    <s:String x:Key="Str_NetSourceRepoStatusStale">利用可能 (一部のみ)</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusFailed">失敗</s:String>
     <s:String x:Key="Str_NetSourceInvalidRepoUrl">リポジトリ URL を認識できません。対応形式: https://github.com/owner/repo または owner/repo</s:String>
     <s:String x:Key="Str_NetSourceRepoAlreadyAdded">このリポジトリは既に追加されています。</s:String>
