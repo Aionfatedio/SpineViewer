@@ -25,7 +25,7 @@ namespace SpineViewer.ViewModels.MainWindow
         /// <summary>
         /// 文件保存路径
         /// </summary>
-        public static readonly string PreferenceFilePath = Path.Combine(Path.GetDirectoryName(Environment.ProcessPath), "preference.json");
+        public static readonly string PreferenceFilePath = Path.Combine(App.ProcessDataDirectory, "preference.json");
 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -109,6 +109,7 @@ namespace SpineViewer.ViewModels.MainWindow
                     DebugClippings = DebugClippings,
 
                     RenderSelectedOnly = RenderSelectedOnly,
+                    HighlightSelectedModel = HighlightSelectedModel,
                     HitTestLevel = HitTestLevel,
                     LogHitSlots = LogHitSlots,
                     MaxFps = MaxFps,
@@ -150,6 +151,7 @@ namespace SpineViewer.ViewModels.MainWindow
                 DebugClippings = value.DebugClippings;
 
                 RenderSelectedOnly = value.RenderSelectedOnly;
+                HighlightSelectedModel = value.HighlightSelectedModel;
                 HitTestLevel = value.HitTestLevel;
                 LogHitSlots = value.LogHitSlots;
                 MaxFps = value.MaxFps;
@@ -278,6 +280,12 @@ namespace SpineViewer.ViewModels.MainWindow
         {
             get => _vmMain.SFMLRendererViewModel.RenderSelectedOnly;
             set => SetProperty(_vmMain.SFMLRendererViewModel.RenderSelectedOnly, value, v => _vmMain.SFMLRendererViewModel.RenderSelectedOnly = v);
+        }
+
+        public bool HighlightSelectedModel
+        {
+            get => _vmMain.SFMLRendererViewModel.HighlightSelectedModel;
+            set => SetProperty(_vmMain.SFMLRendererViewModel.HighlightSelectedModel, value, v => _vmMain.SFMLRendererViewModel.HighlightSelectedModel = v);
         }
 
         public HitTestLevel HitTestLevel
