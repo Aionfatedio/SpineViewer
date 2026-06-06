@@ -6,6 +6,7 @@ using SpineViewer.Models;
 using SpineViewer.NetSource.Models;
 using SpineViewer.Services;
 using SpineViewer.Utils;
+using SpineViewer.ViewModels.NetSourceDialog;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows;
@@ -105,6 +106,13 @@ namespace SpineViewer.ViewModels.MainWindow
         /// </summary>
         public ExplorerListViewModel ExplorerListViewModel => _explorerListViewModel;
         private readonly ExplorerListViewModel _explorerListViewModel;
+
+        public NetSourceDialogViewModel? NetSourceViewModel
+        {
+            get => _netSourceViewModel;
+            private set => SetProperty(ref _netSourceViewModel, value);
+        }
+        private NetSourceDialogViewModel? _netSourceViewModel;
 
         /// <summary>
         /// 模型列表 ViewModel
@@ -229,6 +237,18 @@ namespace SpineViewer.ViewModels.MainWindow
         public void SaveNetSourceState()
         {
             UserStateSaveRequested?.Invoke();
+        }
+
+        public void ReloadNetSourceViewModel()
+        {
+            NetSourceViewModel?.Dispose();
+            NetSourceViewModel = new NetSourceDialogViewModel(this);
+        }
+
+        public void DisposeNetSourceViewModel()
+        {
+            NetSourceViewModel?.Dispose();
+            NetSourceViewModel = null;
         }
     }
 }

@@ -25,6 +25,7 @@
     <s:String x:Key="Str_SpineObject">模型</s:String>
     <s:String x:Key="Str_Canvas">画面</s:String>
     <s:String x:Key="Str_LocalAssets">本地资源</s:String>
+    <s:String x:Key="Str_OnlineAssets">在线资源</s:String>
     
     <s:String x:Key="Str_ModelAnimation">模型动画</s:String>
     <s:String x:Key="Str_ModelAnimationTooltip">在左侧模型列表中添加并设置模型动画</s:String>
@@ -35,7 +36,6 @@
     <s:String x:Key="Str_Filter">筛选</s:String>
     <s:String x:Key="Str_ChangeCurrentDirectoryTooltip">打开目录</s:String>
     <s:String x:Key="Str_RefreshItemsTooltip">刷新列表项</s:String>
-    <s:String x:Key="Str_NetSourceTooltip">GitHub 仓库导入</s:String>
     <s:String x:Key="Str_FileDirectory">文件目录</s:String>
     <s:String x:Key="Str_FileName">文件名</s:String>
     <s:String x:Key="Str_AddSelectedItems">导入选中项</s:String>

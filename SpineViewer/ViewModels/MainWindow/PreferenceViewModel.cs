@@ -50,6 +50,7 @@ namespace SpineViewer.ViewModels.MainWindow
 
             Preference = m;
             SavePreference(m);
+            _vmMain.ReloadNetSourceViewModel();
         }
 
         private static void SavePreference(PreferenceModel m)

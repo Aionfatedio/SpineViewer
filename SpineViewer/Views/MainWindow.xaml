@@ -6,6 +6,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:hc="https://handyorg.github.io/handycontrol"
         xmlns:vm="clr-namespace:SpineViewer.ViewModels.MainWindow"
+        xmlns:views="clr-namespace:SpineViewer.Views"
         xmlns:SFMLRenderer="clr-namespace:SFMLRenderer;assembly=SFMLRenderer"
         mc:Ignorable="d"
         x:Name="_mainWindow"
@@ -906,7 +907,6 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <hc:TextBox hc:InfoElement.Placeholder="{DynamicResource Str_Filter}"
                                                         Text="{Binding FilterString, UpdateSourceTrigger=PropertyChanged}"/>
@@ -922,22 +922,6 @@
                                                     hc:IconElement.Height="14"
                                                     Command="{Binding Cmd_RefreshItems}"
                                                     ToolTip="{DynamicResource Str_RefreshItemsTooltip}"/>
-                                            <Button Grid.Column="3"
-                                                    Padding="6 0"
-                                                    Command="{Binding Cmd_OpenNetSourceDialog}"
-                                                    ToolTip="{DynamicResource Str_NetSourceTooltip}">
-                                                <Viewbox Stretch="Uniform" Width="18" Height="18" UseLayoutRounding="True">
-                                                    <Canvas Width="48" Height="48">
-                                                        <Path Data="{StaticResource Geo_CloudDownload}"
-                                                              Stroke="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource AncestorType=Button}}"
-                                                              StrokeThickness="4"
-                                                              StrokeStartLineCap="Round"
-                                                              StrokeEndLineCap="Round"
-                                                              StrokeLineJoin="Round"
-                                                              Fill="Transparent"/>
-                                                    </Canvas>
-                                                </Viewbox>
-                                            </Button>
                                         </Grid>
 
                                         <StatusBar DockPanel.Dock="Bottom">
@@ -1093,6 +1077,28 @@
                                             </ListBoxItem>
                                         </ListBox>
                                     </DockPanel>
+                                </Grid>
+                            </TabItem>
+
+                            <!-- 在线资源 (Github) -->
+                            <TabItem>
+                                <TabItem.Header>
+                                    <Border Style="{StaticResource MyTabItemHeaderContainerStyle}"
+                                            MouseLeftButtonDown="MainTabControlHeader_MouseLeftButtonDown"
+                                            ToolTip="{DynamicResource Str_OnlineAssets}">
+                                        <Viewbox Width="24" Height="24">
+                                            <Path Data="{StaticResource Geo_CloudArrowDown}" Style="{StaticResource MyTabItemHeaderPathStyle}"/>
+                                        </Viewbox>
+                                    </Border>
+                                </TabItem.Header>
+                                <Grid x:Name="_onlineAssets">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition/>
+                                    </Grid.RowDefinitions>
+                                    <views:NetSourcePanel Grid.RowSpan="3"
+                                                          DataContext="{Binding NetSourceViewModel}"/>
                                 </Grid>
                             </TabItem>
 

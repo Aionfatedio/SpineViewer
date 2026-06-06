@@ -25,6 +25,7 @@
     <s:String x:Key="Str_SpineObject">モデル</s:String>
     <s:String x:Key="Str_Canvas">キャンバス</s:String>
     <s:String x:Key="Str_LocalAssets">ローカルアセット</s:String>
+    <s:String x:Key="Str_OnlineAssets">オンラインアセット</s:String>
 
     <s:String x:Key="Str_ModelAnimation">モデルアニメーション</s:String>
     <s:String x:Key="Str_ModelAnimationTooltip">左側のモデルリストでモデルアニメーションを追加・設定します</s:String>
@@ -35,7 +36,6 @@
     <s:String x:Key="Str_Filter">フィルター</s:String>
     <s:String x:Key="Str_ChangeCurrentDirectoryTooltip">フォルダーを開く</s:String>
     <s:String x:Key="Str_RefreshItemsTooltip">リストを更新</s:String>
-    <s:String x:Key="Str_NetSourceTooltip">GitHub リポジトリ読み込み</s:String>
     <s:String x:Key="Str_FileDirectory">ファイルディレクトリ</s:String>
     <s:String x:Key="Str_FileName">ファイル名</s:String>
     <s:String x:Key="Str_AddSelectedItems">選択項目をインポート</s:String>

@@ -1,24 +1,15 @@
-<Window x:Class="SpineViewer.Views.NetSourceDialog"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:hc="https://handyorg.github.io/handycontrol"
-        xmlns:netmodels="clr-namespace:SpineViewer.NetSource.Models"
-        xmlns:vmnet="clr-namespace:SpineViewer.ViewModels.NetSourceDialog"
-        d:DataContext="{d:DesignInstance Type=vmnet:NetSourceDialogViewModel}"
-        mc:Ignorable="d"
-        Title="{DynamicResource Str_NetSourceDialogTitle}"
-        Background="{DynamicResource RegionBrush}"
-        Width="900"
-        Height="600"
-        MinWidth="700"
-        MinHeight="450"
-        ShowInTaskbar="False"
-        WindowStartupLocation="CenterOwner"
-        Loaded="NetSourceDialog_Loaded"
-        Closing="NetSourceDialog_Closing">
+<UserControl x:Class="SpineViewer.Views.NetSourcePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:netmodels="clr-namespace:SpineViewer.NetSource.Models"
+             xmlns:vmnet="clr-namespace:SpineViewer.ViewModels.NetSourceDialog"
+             d:DataContext="{d:DesignInstance Type=vmnet:NetSourceDialogViewModel}"
+             mc:Ignorable="d"
+             Loaded="NetSourcePanel_Loaded">
     <DockPanel>
 
         <Border DockPanel.Dock="Bottom">
@@ -30,7 +21,6 @@
                     </Style>
                 </WrapPanel.Resources>
                 <Button Content="{DynamicResource Str_NetSourceDownloadAndImport}" Click="ButtonDownload_Click"/>
-                <Button Content="{DynamicResource Str_NetSourceClose}" Click="ButtonClose_Click"/>
             </WrapPanel>
         </Border>
 
@@ -312,4 +302,4 @@
         </Grid>
 
     </DockPanel>
-</Window>
+</UserControl>

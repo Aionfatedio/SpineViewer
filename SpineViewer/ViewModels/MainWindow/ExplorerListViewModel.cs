@@ -111,12 +111,6 @@ namespace SpineViewer.ViewModels.MainWindow
         public RelayCommand Cmd_RefreshItems => _cmd_RefreshItems ??= new(RefreshItems);
         private RelayCommand? _cmd_RefreshItems;
 
-        public RelayCommand Cmd_OpenNetSourceDialog => _cmd_OpenNetSourceDialog ??= new(() =>
-        {
-            DialogService.ShowNetSourceDialog(_vmMain);
-        });
-        private RelayCommand? _cmd_OpenNetSourceDialog;
-
         /// <summary>
         /// 选中项发生变化命令
         /// </summary>

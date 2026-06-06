@@ -1,5 +1,3 @@
-using SpineViewer.Extensions;
-using SpineViewer.Resources;
 using SpineViewer.Utils;
 using SpineViewer.ViewModels.NetSourceDialog;
 using System;
@@ -10,39 +8,57 @@ using System.Windows.Input;
 
 namespace SpineViewer.Views
 {
-    public partial class NetSourceDialog : Window
+    public partial class NetSourcePanel : UserControl
     {
         private ListBoxItem? _repoDragSourceItem;
         private Point _repoDragSourcePoint;
 
-        public NetSourceDialog()
+        public NetSourcePanel()
         {
             InitializeComponent();
-            SourceInitialized += NetSourceDialog_SourceInitialized;
+            DataContextChanged += NetSourcePanel_DataContextChanged;
         }
 
-        private void NetSourceDialog_SourceInitialized(object? sender, EventArgs e)
+        private void NetSourcePanel_Loaded(object sender, RoutedEventArgs e)
         {
-            this.SetWindowTextColor(AppResource.Color_PrimaryText);
-            this.SetWindowCaptionColor(AppResource.Color_Region);
+            ConfigureCommitColumns();
+        }
+
+        private void NetSourcePanel_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            ConfigureCommitColumns();
+        }
+
+        private void ConfigureCommitColumns()
+        {
+            if (DataContext is not NetSourceDialogViewModel vm) return;
+
+            SetColumnVisible(_commitColumn, vm.HasToken, 5);
+            SetColumnVisible(_commitDateColumn, vm.HasToken, 6);
+        }
+
+        private void SetColumnVisible(GridViewColumn column, bool visible, int index)
+        {
+            var columns = _resultsGridView.Columns;
+            var exists = columns.Contains(column);
+
+            if (visible && !exists)
+                columns.Insert(Math.Min(index, columns.Count), column);
+            else if (!visible && exists)
+                columns.Remove(column);
         }
 
         private void ButtonDownload_Click(object sender, RoutedEventArgs e)
         {
-            var vm = (NetSourceDialogViewModel)DataContext;
+            if (DataContext is not NetSourceDialogViewModel vm) return;
             vm.Cmd_DownloadAndImport.Execute(_resultsListView.SelectedItems);
-        }
-
-        private void ButtonClose_Click(object sender, RoutedEventArgs e)
-        {
-            DialogResult = false;
         }
 
         private void ResultsListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             if (sender is not ListView list) return;
             if (list.SelectedItems.Count <= 0) return;
-            var vm = (NetSourceDialogViewModel)DataContext;
+            if (DataContext is not NetSourceDialogViewModel vm) return;
             vm.Cmd_DownloadAndImport.Execute(list.SelectedItems);
         }
 
@@ -64,29 +80,16 @@ namespace SpineViewer.Views
         private void ResultsListView_ContextMenuOpening(object sender, ContextMenuEventArgs e)
         {
             if (sender is not ListView list) return;
-            var vm = (NetSourceDialogViewModel)DataContext;
+            if (DataContext is not NetSourceDialogViewModel vm) return;
             vm.UpdateResultContextMenuState(list.SelectedItems);
-        }
-
-        private void NetSourceDialog_Loaded(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is not NetSourceDialogViewModel { HasToken: false }) return;
-
-            _resultsGridView.Columns.Remove(_commitColumn);
-            _resultsGridView.Columns.Remove(_commitDateColumn);
         }
 
         private void ResultsListView_HeaderClick(object sender, RoutedEventArgs e)
         {
             if (e.OriginalSource is not GridViewColumnHeader header) return;
             if (header.Tag is not string key) return;
-            var vm = (NetSourceDialogViewModel)DataContext;
+            if (DataContext is not NetSourceDialogViewModel vm) return;
             vm.SortByColumn(key);
-        }
-
-        private void NetSourceDialog_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
-        {
-            if (DataContext is IDisposable d) d.Dispose();
         }
 
         #region 仓库列表拖拽排序
@@ -154,9 +157,9 @@ namespace SpineViewer.Views
         {
             if (sender is not ListBox list) return;
             if (!e.Data.GetDataPresent(typeof(NetSourceRepoItemViewModel))) return;
+            if (DataContext is not NetSourceDialogViewModel vm) return;
 
             var src = (NetSourceRepoItemViewModel)e.Data.GetData(typeof(NetSourceRepoItemViewModel))!;
-            var vm = (NetSourceDialogViewModel)DataContext;
 
             int srcIdx = vm.Repos.IndexOf(src);
             if (srcIdx < 0) return;
