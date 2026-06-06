@@ -354,14 +354,13 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Label Content="{DynamicResource Str_NetSourceProxyAddress}"
-                                       IsEnabled="{Binding NetSourceUseProxy}"
                                        ToolTip="{DynamicResource Str_NetSourceProxyAddressTooltip}"/>
                                 <Grid Grid.Column="1"
                                       IsEnabled="{Binding NetSourceUseProxy}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="48"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBox Text="{Binding NetSourceProxyHost, UpdateSourceTrigger=PropertyChanged}"
                                              ToolTip="{DynamicResource Str_NetSourceProxyAddressTooltip}"/>

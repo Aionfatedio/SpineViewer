@@ -1096,26 +1096,6 @@
                                 </Grid>
                             </TabItem>
 
-                            <!-- TODO: 在线资源 (Github) -->
-                            <TabItem Visibility="Collapsed">
-                                <TabItem.Header>
-                                    <Border Style="{StaticResource MyTabItemHeaderContainerStyle}"
-                                            MouseLeftButtonDown="MainTabControlHeader_MouseLeftButtonDown"
-                                            ToolTip="{DynamicResource Str_OnlineAssets}">
-                                        <Viewbox Width="24" Height="24">
-                                            <Path Data="{StaticResource Geo_CloudArrowDown}" Style="{StaticResource MyTabItemHeaderPathStyle}"/>
-                                        </Viewbox>
-                                    </Border>
-                                </TabItem.Header>
-                                <Grid x:Name="_onlineAssets">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition/>
-                                    </Grid.RowDefinitions>
-                                </Grid>
-                            </TabItem>
-
                         </TabControl>
                     </Border>
 
