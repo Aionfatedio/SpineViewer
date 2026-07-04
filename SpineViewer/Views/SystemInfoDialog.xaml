@@ -7,7 +7,7 @@
         xmlns:viewmodels="clr-namespace:SpineViewer.ViewModels" 
         d:DataContext="{d:DesignInstance Type=viewmodels:SystemInfoDialogViewModel}"
         mc:Ignorable="d"
-        Title="{DynamicResource Str_Diagnostics}"
+        Title="{DynamicResource Str_SystemInfo}"
         Background="{DynamicResource RegionBrush}"
         Height="450" 
         Width="800"    
@@ -28,7 +28,7 @@
                     <Setter Property="HorizontalAlignment" Value="Stretch"/>
                     <Setter Property="HorizontalContentAlignment" Value="Left"/>
                 </Style>
-                <Style TargetType="{x:Type TextBox}" BasedOn="{StaticResource TextBoxBaseStyle}">
+                <Style TargetType="{x:Type TextBox}" BasedOn="{StaticResource MyTextBoxStyle}">
                     <Setter Property="HorizontalContentAlignment" Value="Left"/>
                 </Style>
             </Border.Resources>

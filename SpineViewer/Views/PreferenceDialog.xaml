@@ -35,7 +35,7 @@
                     <Setter Property="HorizontalAlignment" Value="Stretch"/>
                     <Setter Property="HorizontalContentAlignment" Value="Right"/>
                 </Style>
-                <Style TargetType="{x:Type TextBox}" BasedOn="{StaticResource TextBoxBaseStyle}">
+                <Style TargetType="{x:Type TextBox}" BasedOn="{StaticResource MyTextBoxStyle}">
                     <Setter Property="HorizontalContentAlignment" Value="Right"/>
                 </Style>
                 <Style TargetType="{x:Type ComboBox}" BasedOn="{StaticResource ComboBoxBaseStyle}">
@@ -84,6 +84,15 @@
 
                     <GroupBox Header="{DynamicResource Str_SpineLoadPreference}">
                         <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="LabelCol"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Content="{DynamicResource Str_AvoidOverlapWhenAdding}"/>
+                                <ToggleButton Grid.Column="1" IsChecked="{Binding AvoidOverlapWhenAdding}"/>
+                            </Grid>
+                            
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="LabelCol"/>

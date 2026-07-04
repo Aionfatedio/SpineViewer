@@ -11,7 +11,7 @@
         <BaseOutputPath>$(SolutionDir)out</BaseOutputPath>
         <OutputPath>$(BaseOutputPath)\$(Configuration)\$(PlatformTarget)</OutputPath>
         <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-        <Version>0.16.25</Version>
+        <Version>0.16.27</Version>
         <OutputType>WinExe</OutputType>
         <UseWPF>true</UseWPF>
     </PropertyGroup>
@@ -20,6 +20,7 @@
         <NoWarn>$(NoWarn);NETSDK1206</NoWarn>
         <ApplicationIcon>Resources\Images\spineviewer.ico</ApplicationIcon>
         <ApplicationManifest>app.manifest</ApplicationManifest>
+        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     </PropertyGroup>
 
     <ItemGroup>

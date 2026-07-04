@@ -96,8 +96,10 @@ namespace SpineViewer.ViewModels.MainWindow
                     ForceNearest = ForceNearest,
                     ForceMipmap = ForceMipmap,
 
+                    AvoidOverlapWhenAdding = AvoidOverlapWhenAdding,
                     IsShown = IsShown,
                     UsePma = UsePma,
+
                     DebugTexture = DebugTexture,
                     DebugBounds = DebugBounds,
                     DebugBones = DebugBones,
@@ -137,6 +139,7 @@ namespace SpineViewer.ViewModels.MainWindow
                 ForceNearest = value.ForceNearest;
                 ForceMipmap = value.ForceMipmap;
 
+                AvoidOverlapWhenAdding = value.AvoidOverlapWhenAdding;
                 IsShown = value.IsShown;
                 UsePma = value.UsePma;
 
@@ -198,6 +201,12 @@ namespace SpineViewer.ViewModels.MainWindow
         #endregion
         
         #region 模型加载首选项
+
+        public bool AvoidOverlapWhenAdding
+        {
+            get => _vmMain.SpineObjectListViewModel.AvoidOverlapWhenAdding;
+            set => SetProperty(_vmMain.SpineObjectListViewModel.AvoidOverlapWhenAdding, value, v => _vmMain.SpineObjectListViewModel.AvoidOverlapWhenAdding = v);
+        }
 
         public bool IsShown
         {
