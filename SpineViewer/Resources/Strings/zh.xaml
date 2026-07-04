@@ -286,7 +286,6 @@
     <s:String x:Key="Str_AssociateFileSuffix">关联文件后缀</s:String>
 
     <!-- GitHub 仓库导入 -->
-    <s:String x:Key="Str_NetSourceDialogTitle">从 GitHub 仓库导入 Spine 模型</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlPlaceholder">输入 GitHub 仓库地址</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlTooltip">支持格式: https://github.com/owner/repo、https://github.com/owner/repo/tree/branch、owner/repo</s:String>
     <s:String x:Key="Str_NetSourceAddRepoTooltip">添加仓库</s:String>
@@ -328,6 +327,7 @@
     <s:String x:Key="Str_NetSourceColFiles">文件数</s:String>
     <s:String x:Key="Str_NetSourceColCommit">提交</s:String>
     <s:String x:Key="Str_NetSourceColCommitTime">提交时间</s:String>
+    <s:String x:Key="Str_NetSourceHeaderSortModelTooltip">点击将已下载模型置顶并按名称排序, 再次点击恢复默认顺序</s:String>
     <s:String x:Key="Str_NetSourceHeaderSortRepoTooltip">按仓库优先级排序</s:String>
     <s:String x:Key="Str_NetSourceHeaderSortGenericTooltip">按此列排序</s:String>
     <s:String x:Key="Str_NetSourceDownloadAndImport">导入选中模型</s:String>
@@ -336,7 +336,6 @@
     <s:String x:Key="Str_NetSourceRemoveLocalFiles">移除本地文件</s:String>
     <s:String x:Key="Str_NetSourceRemoveLocalFilesQuest">确定移除所选 {0} 个模型的本地文件?</s:String>
     <s:String x:Key="Str_NetSourceSaveAs">另存为</s:String>
-    <s:String x:Key="Str_NetSourceClose">关闭</s:String>
     <s:String x:Key="Str_NetSourcePreference">仓库导入选项</s:String>
     <s:String x:Key="Str_NetSourceCacheRoot">缓存目录</s:String>
     <s:String x:Key="Str_NetSourceCacheRootTooltip">GitHub 仓库资源根目录；凭证等缓存保存至 netcache，模型与模型索引保存至 Spine</s:String>

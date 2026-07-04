@@ -4,6 +4,8 @@ namespace SpineViewer.NetSource.Models
 {
     public class RepoIndexCache
     {
+        // 默认值必须保持 1: 旧缓存 JSON 缺失该字段时反序列化得到 1,
+        // 与 RepoIndexService.CurrentSchemaVersion 不一致即触发全量重建。
         public int SchemaVersion { get; set; } = 1;
 
         public string RepoId { get; set; } = string.Empty;

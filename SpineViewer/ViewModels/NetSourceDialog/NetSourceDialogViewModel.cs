@@ -23,6 +23,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
+        public const string SortKeyModelName = "ModelName";
         public const string SortKeyRepo = "Repo";
         public const string SortKeySize = "Size";
         public const string SortKeyFileCount = "FileCount";
@@ -187,7 +188,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             {
                 // 本地高亮依赖 bundle hash；未配置 PAT 时不解析单文件提交元数据，避免给出不可靠状态。
                 var localInfo = HasToken
-                    ? _downloadService.GetBundleInfo(r.RepoId, r.Bundle, r.DownloadCommitSha)
+                    ? _downloadService.GetBundleInfo(r.RepoId, r.Bundle)
                     : new LocalBundleInfo(DownloadedBundleState.None, null);
                 var item = new NetSourceBundleItemViewModel(r)
                 {
@@ -208,6 +209,14 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         {
             if (string.IsNullOrEmpty(columnKey)) return;
             if (!IsSortKeySupported(columnKey)) return;
+
+            // 模型名列是"置顶排序 ⇄ 默认顺序"开关: 已下载 (蓝/橙) 置顶按名称排, 再点恢复自然顺序。
+            if (columnKey == SortKeyModelName && string.Equals(ActiveSortKey, SortKeyModelName, StringComparison.Ordinal))
+            {
+                ResetSortState();
+                RefreshSearch();
+                return;
+            }
 
             if (string.Equals(ActiveSortKey, columnKey, StringComparison.Ordinal))
             {
@@ -238,7 +247,8 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
         private static bool IsSortKeySupported(string? sortKey)
         {
-            return sortKey == SortKeyRepo
+            return sortKey == SortKeyModelName
+                || sortKey == SortKeyRepo
                 || sortKey == SortKeySize
                 || sortKey == SortKeyFileCount
                 || sortKey == SortKeyCommitDate;
@@ -251,6 +261,11 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             var current = SearchResults.ToList();
             IEnumerable<NetSourceBundleItemViewModel> ordered = ActiveSortKey switch
             {
+                // 已下载 (蓝/橙混排) 置顶, 置顶组和剩余组各自按模型名 A-Z 排序。
+                SortKeyModelName => current
+                    .OrderByDescending(b => b.LocalState is DownloadedBundleState.Current or DownloadedBundleState.Outdated)
+                    .ThenBy(b => b.ModelName, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(b => b.BundleDir, StringComparer.Ordinal),
                 SortKeyRepo => SortDescending
                     ? current.OrderByDescending(b => b.RepoOrderIndex).ThenBy(b => b.BundleDir, StringComparer.Ordinal)
                     : current.OrderBy(b => b.RepoOrderIndex).ThenBy(b => b.BundleDir, StringComparer.Ordinal),

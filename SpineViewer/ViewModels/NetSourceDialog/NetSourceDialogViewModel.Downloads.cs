@@ -29,6 +29,64 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         public RelayCommand<IList?> Cmd_RemoveLocalFiles => _cmd_RemoveLocalFiles ??= new(RemoveLocalFiles_Execute, CanRemoveLocalFiles);
         private RelayCommand<IList?>? _cmd_RemoveLocalFiles;
 
+        /// <summary>
+        /// 逐个 bundle 串行下载, 是三种下载入口 (导入/另存为/更新) 共享的进度循环。
+        /// </summary>
+        private (int Success, int Failed) RunBundleDownloadLoop(
+            IReadOnlyList<BundleDownloadRequest> reqs,
+            IProgressReporter reporter,
+            CancellationToken ct,
+            string logContext,
+            Action<BundleDownloadResult>? onDownloaded = null)
+        {
+            int total = reqs.Count;
+            int success = 0;
+            int failed = 0;
+
+            _vmMain.ProgressState = TaskbarItemProgressState.Normal;
+            _vmMain.ProgressValue = 0;
+            reporter.Total = total;
+            reporter.Done = 0;
+            reporter.ProgressText = $"[0/{total}]";
+
+            for (int i = 0; i < total; i++)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                var req = reqs[i];
+                reporter.ProgressText = $"[{i}/{total}] {req.Bundle.ModelName}";
+
+                try
+                {
+                    var fileProgress = new Progress<BundleDownloadProgress>(p =>
+                    {
+                        reporter.ProgressText = $"[{i + 1}/{total}] {req.Bundle.ModelName}  ·  {p.CurrentFile} ({p.CompletedFiles}/{p.TotalFiles})";
+                    });
+
+                    var result = _downloadService.DownloadAsync(req, fileProgress, ct).GetAwaiter().GetResult();
+                    onDownloaded?.Invoke(result);
+                    success++;
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Info("{0} canceled at {1}", logContext, req.Bundle.ModelName);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex.ToString());
+                    _logger.Error("{0} failed for {1}: {2}", logContext, req.Bundle.ModelName, ex.Message);
+                    failed++;
+                }
+
+                reporter.Done = i + 1;
+                _vmMain.ProgressValue = (i + 1f) / total;
+            }
+            _vmMain.ProgressState = TaskbarItemProgressState.None;
+
+            return (success, failed);
+        }
+
         private void SaveAs_Execute(IList? args)
         {
             if (args is null || args.Count <= 0) return;
@@ -51,65 +109,17 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             }
             if (reqs.Count == 0) return;
 
-            _downloadCts?.Cancel();
-            _downloadCts = new CancellationTokenSource();
-            var token = _downloadCts.Token;
+            RestartDownloadCts(out var token);
 
             ProgressService.RunAsync((reporter, ct) =>
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token);
-                SaveAsTask(reqs, reporter, linked.Token);
+                var (success, failed) = RunBundleDownloadLoop(reqs, reporter, linked.Token, "Save-as");
+                if (failed > 0)
+                    _logger.Warn("Save-as finished: {0} success, {1} failed", success, failed);
+                else
+                    _logger.Info("Save-as finished: {0} bundle(s) saved to disk", success);
             }, Str("Str_NetSourceSaveAsTitle"));
-        }
-
-        private void SaveAsTask(List<BundleDownloadRequest> reqs, IProgressReporter reporter, CancellationToken ct)
-        {
-            int total = reqs.Count;
-            int success = 0;
-            int failed = 0;
-
-            _vmMain.ProgressState = TaskbarItemProgressState.Normal;
-            _vmMain.ProgressValue = 0;
-            reporter.Total = total;
-            reporter.Done = 0;
-            reporter.ProgressText = $"[0/{total}]";
-
-            for (int i = 0; i < total; i++)
-            {
-                if (ct.IsCancellationRequested) break;
-                var req = reqs[i];
-                reporter.ProgressText = $"[{i}/{total}] {req.Bundle.ModelName}";
-
-                try
-                {
-                    var fp = new Progress<BundleDownloadProgress>(p =>
-                    {
-                        reporter.ProgressText = $"[{i + 1}/{total}] {req.Bundle.ModelName}  ·  {p.CurrentFile} ({p.CompletedFiles}/{p.TotalFiles})";
-                    });
-                    _downloadService.DownloadAsync(req, fp, ct).GetAwaiter().GetResult();
-                    success++;
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.Info("Save-as canceled at {0}", req.Bundle.ModelName);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug(ex.ToString());
-                    _logger.Error("Failed to save bundle {0}: {1}", req.Bundle.ModelName, ex.Message);
-                    failed++;
-                }
-
-                reporter.Done = i + 1;
-                _vmMain.ProgressValue = (i + 1f) / total;
-            }
-            _vmMain.ProgressState = TaskbarItemProgressState.None;
-
-            if (failed > 0)
-                _logger.Warn("Save-as finished: {0} success, {1} failed", success, failed);
-            else
-                _logger.Info("Save-as finished: {0} bundle(s) saved to disk", success);
         }
 
         private bool CanUpdateLocalFiles(IList? args)
@@ -125,7 +135,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             {
                 var cfg = Repos.FirstOrDefault(r => r.Config.RepoId == it.Result.RepoId)?.Config;
                 if (cfg is null) continue;
-                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Result.DownloadCommitSha, it.Bundle.BundleDir);
+                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Bundle.BundleDir);
                 reqs.Add(new BundleDownloadRequest(
                     cfg,
                     it.Bundle,
@@ -136,70 +146,20 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             }
             if (reqs.Count == 0) return;
 
-            _downloadCts?.Cancel();
-            _downloadCts = new CancellationTokenSource();
-            var token = _downloadCts.Token;
+            RestartDownloadCts(out var token);
 
             ProgressService.RunAsync((reporter, ct) =>
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token);
-                UpdateLocalFilesTask(reqs, reporter, linked.Token);
+                var (success, failed) = RunBundleDownloadLoop(reqs, reporter, linked.Token, "GitHub repo file update");
+
+                Application.Current.Dispatcher.Invoke(() => RefreshSearch());
+
+                if (failed > 0)
+                    _logger.Warn("GitHub repo file update finished: {0} success, {1} failed", success, failed);
+                else
+                    _logger.Info("GitHub repo file update finished: {0} bundle(s) updated", success);
             }, Str("Str_NetSourceUpdateFilesTitle"));
-        }
-
-        private void UpdateLocalFilesTask(List<BundleDownloadRequest> reqs, IProgressReporter reporter, CancellationToken ct)
-        {
-            int totalBundles = reqs.Count;
-            int successBundle = 0;
-            int failedBundle = 0;
-
-            _vmMain.ProgressState = TaskbarItemProgressState.Normal;
-            _vmMain.ProgressValue = 0;
-            reporter.Total = totalBundles;
-            reporter.Done = 0;
-            reporter.ProgressText = $"[0/{totalBundles}]";
-
-            for (int i = 0; i < totalBundles; i++)
-            {
-                if (ct.IsCancellationRequested) break;
-
-                var req = reqs[i];
-                reporter.ProgressText = $"[{i}/{totalBundles}] {req.Bundle.ModelName}";
-
-                try
-                {
-                    var fileProgress = new Progress<BundleDownloadProgress>(p =>
-                    {
-                        reporter.ProgressText = $"[{i + 1}/{totalBundles}] {req.Bundle.ModelName}  ·  {p.CurrentFile} ({p.CompletedFiles}/{p.TotalFiles})";
-                    });
-
-                    _downloadService.DownloadAsync(req, fileProgress, ct).GetAwaiter().GetResult();
-                    successBundle++;
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.Info("GitHub repo file update canceled at {0}", req.Bundle.ModelName);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug(ex.ToString());
-                    _logger.Error("Failed to update GitHub repo files for {0}: {1}", req.Bundle.ModelName, ex.Message);
-                    failedBundle++;
-                }
-
-                reporter.Done = i + 1;
-                _vmMain.ProgressValue = (i + 1f) / totalBundles;
-            }
-
-            _vmMain.ProgressState = TaskbarItemProgressState.None;
-
-            Application.Current.Dispatcher.Invoke(() => RefreshSearch());
-
-            if (failedBundle > 0)
-                _logger.Warn("GitHub repo file update finished: {0} success, {1} failed", successBundle, failedBundle);
-            else
-                _logger.Info("GitHub repo file update finished: {0} bundle(s) updated", successBundle);
         }
 
         private bool CanRemoveLocalFiles(IList? args)
@@ -220,10 +180,10 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             {
                 try
                 {
-                    var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, it.Result.RepoId, it.Result.DownloadCommitSha, it.Bundle.BundleDir);
+                    var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, it.Result.RepoId, it.Bundle.BundleDir);
                     var localSkelPath = System.IO.Path.Combine(localDir, GetRepoFileName(it.Bundle.SkelPath));
                     unloadedModels += _vmMain.SpineObjectListViewModel.RemoveLoadedSpineObjectFromPathIfUnderRoot(localSkelPath, repoDownloadsRoot);
-                    removedFiles += _downloadService.RemoveLocalFiles(it.Result.RepoId, it.Bundle, it.Result.DownloadCommitSha);
+                    removedFiles += _downloadService.RemoveLocalFiles(it.Result.RepoId, it.Bundle);
                 }
                 catch (Exception ex)
                 {
@@ -256,6 +216,13 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             return idx < 0 ? repoPath : repoPath[(idx + 1)..];
         }
 
+        private void RestartDownloadCts(out CancellationToken token)
+        {
+            _downloadCts?.Cancel();
+            _downloadCts = new CancellationTokenSource();
+            token = _downloadCts.Token;
+        }
+
         private void DownloadAndImport_Execute(IList? args)
         {
             if (args is null || args.Count <= 0) return;
@@ -271,7 +238,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 if (cfg is null) continue;
 
                 // 先按 GitHub repo 下载路径查重；已载入时只唤醒主列表，不重复添加模型。
-                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Result.DownloadCommitSha, it.Bundle.BundleDir);
+                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, cfg.RepoId, it.Bundle.BundleDir);
                 var localTargetSkelPath = System.IO.Path.Combine(localDir, GetRepoFileName(it.Bundle.SkelPath));
                 if (_vmMain.SpineObjectListViewModel.TrySelectLoadedSpineObject(localTargetSkelPath))
                 {
@@ -280,7 +247,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 }
 
                 var localInfo = HasToken
-                    ? _downloadService.GetBundleInfo(it.Result.RepoId, it.Bundle, it.Result.DownloadCommitSha)
+                    ? _downloadService.GetBundleInfo(it.Result.RepoId, it.Bundle)
                     : new LocalBundleInfo(DownloadedBundleState.None, null);
                 var localState = localInfo.State;
                 it.LocalState = localState;
@@ -288,19 +255,20 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 // 蓝色高亮表示本地文件可直接载入；黄色或默认状态需要重新下载后再载入。
                 if (HasToken
                     && localState == DownloadedBundleState.Current
-                    && _downloadService.TryGetLocalSkelPath(it.Result.RepoId, it.Bundle, it.Result.DownloadCommitSha, out var localSkelPath))
+                    && _downloadService.TryGetLocalSkelPath(it.Result.RepoId, it.Bundle, out var localSkelPath))
                 {
                     localSkelPaths.Add(localSkelPath);
                     continue;
                 }
 
+                // 到达这里的 bundle 都不是可信的最新状态, 统一整包重新下载。
                 reqs.Add(new BundleDownloadRequest(
                     cfg,
                     it.Bundle,
                     it.Result.DownloadCommitSha,
                     localDir,
                     TrackInLibrary: true,
-                    OverwriteExisting: !HasToken || localState != DownloadedBundleState.Current));
+                    OverwriteExisting: true));
             }
             if (reqs.Count == 0)
             {
@@ -322,9 +290,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 return;
             }
 
-            _downloadCts?.Cancel();
-            _downloadCts = new CancellationTokenSource();
-            var token = _downloadCts.Token;
+            RestartDownloadCts(out var token);
 
             ProgressService.RunAsync((reporter, ct) =>
             {
@@ -340,52 +306,10 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             IProgressReporter reporter,
             CancellationToken ct)
         {
-            int totalBundles = reqs.Count;
-            int successBundle = 0;
-            int failedBundle = 0;
             var downloadedSkelPaths = new List<string>(localSkelPaths);
-
-            _vmMain.ProgressState = TaskbarItemProgressState.Normal;
-            _vmMain.ProgressValue = 0;
-            reporter.Total = totalBundles;
-            reporter.Done = 0;
-            reporter.ProgressText = $"[0/{totalBundles}]";
-
-            for (int i = 0; i < totalBundles; i++)
-            {
-                if (ct.IsCancellationRequested) break;
-
-                var req = reqs[i];
-                reporter.ProgressText = $"[{i}/{totalBundles}] {req.Bundle.ModelName}";
-
-                try
-                {
-                    var fileProgress = new Progress<BundleDownloadProgress>(p =>
-                    {
-                        reporter.ProgressText = $"[{i + 1}/{totalBundles}] {req.Bundle.ModelName}  ·  {p.CurrentFile} ({p.CompletedFiles}/{p.TotalFiles})";
-                    });
-
-                    var result = _downloadService.DownloadAsync(req, fileProgress, ct).GetAwaiter().GetResult();
-                    downloadedSkelPaths.Add(result.LocalSkelPath);
-                    successBundle++;
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.Info("Bundle download canceled at {0}", req.Bundle.ModelName);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug(ex.ToString());
-                    _logger.Error("Failed to download bundle {0}: {1}", req.Bundle.ModelName, ex.Message);
-                    failedBundle++;
-                }
-
-                reporter.Done = i + 1;
-                _vmMain.ProgressValue = (i + 1f) / totalBundles;
-            }
-
-            _vmMain.ProgressState = TaskbarItemProgressState.None;
+            var (successBundle, failedBundle) = RunBundleDownloadLoop(
+                reqs, reporter, ct, "Bundle download",
+                result => downloadedSkelPaths.Add(result.LocalSkelPath));
 
             SpineObjectLoadSummary loadSummary = default;
             if (downloadedSkelPaths.Count > 0)

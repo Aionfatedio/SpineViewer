@@ -235,11 +235,6 @@ namespace SpineViewer.ViewModels.MainWindow
 
         public event System.Action? UserStateSaveRequested;
 
-        public void SaveNetSourceRepoConfigs()
-        {
-            SaveNetSourceState();
-        }
-
         public void SaveNetSourceState()
         {
             UserStateSaveRequested?.Invoke();

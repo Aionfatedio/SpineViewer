@@ -249,9 +249,13 @@
                     </ListView.ContextMenu>
                     <ListView.View>
                         <GridView x:Name="_resultsGridView">
-                            <GridViewColumn Header="{DynamicResource Str_NetSourceColModel}"
-                                            DisplayMemberBinding="{Binding ModelName}"
-                                            Width="180"/>
+                            <GridViewColumn DisplayMemberBinding="{Binding ModelName}" Width="180">
+                                <GridViewColumn.Header>
+                                    <GridViewColumnHeader Content="{DynamicResource Str_NetSourceColModel}"
+                                                          Tag="ModelName"
+                                                          ToolTip="{DynamicResource Str_NetSourceHeaderSortModelTooltip}"/>
+                                </GridViewColumn.Header>
+                            </GridViewColumn>
                             <GridViewColumn Header="{DynamicResource Str_NetSourceColDir}"
                                             DisplayMemberBinding="{Binding BundleDir}"
                                             Width="220"/>

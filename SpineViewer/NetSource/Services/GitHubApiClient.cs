@@ -89,12 +89,6 @@ namespace SpineViewer.NetSource.Services
             ApplyAuthHeader();
         }
 
-        public void UpdateToken(string? token)
-        {
-            _token = token;
-            ApplyAuthHeader();
-        }
-
         public bool HasToken => !string.IsNullOrWhiteSpace(_token);
 
         private void ApplyAuthHeader()
@@ -199,7 +193,6 @@ namespace SpineViewer.NetSource.Services
             string commitSha,
             string repoRelativePath,
             string localDestPath,
-            IProgress<long>? progress,
             CancellationToken ct = default)
         {
             var encodedPath = string.Join('/', repoRelativePath
@@ -223,18 +216,9 @@ namespace SpineViewer.NetSource.Services
 
                 await using var dst = new FileStream(localDestPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
                 await using var src = await resp.Content.ReadAsStreamAsync(ct);
-
-                var buffer = new byte[81920];
-                long total = 0;
-                int read;
-                while ((read = await src.ReadAsync(buffer, ct)) > 0)
-                {
-                    await dst.WriteAsync(buffer.AsMemory(0, read), ct);
-                    total += read;
-                    progress?.Report(total);
-                }
+                await src.CopyToAsync(dst, 81920, ct);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 TrySafeDelete(localDestPath);
                 throw;
@@ -270,7 +254,7 @@ namespace SpineViewer.NetSource.Services
             {
                 throw;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw;
             }
@@ -306,7 +290,9 @@ namespace SpineViewer.NetSource.Services
             {
                 throw;
             }
-            catch (OperationCanceledException)
+            // 只放行用户主动取消; HttpClient 超时同样抛 TaskCanceledException,
+            // 必须包装成 GitHubApiException 才能让 UI 显示失败原因而不是静默回到 Pending。
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw;
             }

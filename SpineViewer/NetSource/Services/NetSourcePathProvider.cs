@@ -56,8 +56,9 @@ namespace SpineViewer.NetSource.Services
         public static string GetRepoDownloadsDir(string cacheRoot, string repoId)
             => Path.Combine(GetRepoCacheDir(cacheRoot, repoId), DownloadsFolderName);
 
-        public static string GetBundleLocalDir(string cacheRoot, string repoId, string commitSha, string bundleDir)
+        public static string GetBundleLocalDir(string cacheRoot, string repoId, string bundleDir)
         {
+            // 同一 bundle 只保留最新一次下载, 本地路径不按 commit 区分。
             var safeBundleDir = (bundleDir ?? string.Empty).Replace('/', Path.DirectorySeparatorChar);
             return Path.Combine(GetRepoDownloadsDir(cacheRoot, repoId), safeBundleDir);
         }

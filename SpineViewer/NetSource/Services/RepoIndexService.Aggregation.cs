@@ -125,11 +125,10 @@ namespace SpineViewer.NetSource.Services
 
             var groups = validTextures
                 .GroupBy(t => GetTextureFormatKey(t.Path!))
-                .Where(g => !string.IsNullOrEmpty(g.Key))
                 .Select(g => g.OrderBy(t => t.Path, StringComparer.Ordinal).ToList())
                 .ToList();
-            if (groups.Count <= 1)
-                return groups.FirstOrDefault() ?? validTextures;
+            if (groups.Count == 1)
+                return groups[0];
 
             var candidates = BuildTextureBaseCandidates(skelPath, atlasEntry).ToArray();
             var scoredGroups = groups

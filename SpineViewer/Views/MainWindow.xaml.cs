@@ -184,10 +184,13 @@ public partial class MainWindow : Window
 
         // 加载首选项
         _vm.PreferenceViewModel.LoadPreference();
-        _vm.ReloadNetSourceViewModel();
 
         // 还原上一次用户历史状态并开启监听器
         LoadUserState();
+
+        // 网络源面板依赖用户状态中的仓库列表, 必须在 LoadUserState 之后构建
+        _vm.ReloadNetSourceViewModel();
+
         AddUserStateListeners();
     }
 

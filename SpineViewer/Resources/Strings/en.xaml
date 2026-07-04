@@ -286,7 +286,6 @@
     <s:String x:Key="Str_AssociateFileSuffix">Associate File Extension</s:String>
 
     <!-- GitHub repo loader -->
-    <s:String x:Key="Str_NetSourceDialogTitle">GitHub Repo Loader - Search and Download Spine Models</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlPlaceholder">Enter GitHub repo URL or owner/repo</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlTooltip">Supported: https://github.com/owner/repo, https://github.com/owner/repo/tree/branch, owner/repo</s:String>
     <s:String x:Key="Str_NetSourceAddRepoTooltip">Add repository (Enter also works)</s:String>
@@ -328,6 +327,7 @@
     <s:String x:Key="Str_NetSourceColFiles">Files</s:String>
     <s:String x:Key="Str_NetSourceColCommit">Commit</s:String>
     <s:String x:Key="Str_NetSourceColCommitTime">Committed</s:String>
+    <s:String x:Key="Str_NetSourceHeaderSortModelTooltip">Click to pin downloaded models on top sorted by name; click again to restore the default order.</s:String>
     <s:String x:Key="Str_NetSourceHeaderSortRepoTooltip">Click to sort by repo priority (click again to invert). Manual repo refresh clears the sort.</s:String>
     <s:String x:Key="Str_NetSourceHeaderSortGenericTooltip">Click to sort by this column (click again to invert). Manual repo refresh clears the sort.</s:String>
     <s:String x:Key="Str_NetSourceDownloadAndImport">Download &amp; Import</s:String>
@@ -336,7 +336,6 @@
     <s:String x:Key="Str_NetSourceRemoveLocalFiles">Remove Local Files</s:String>
     <s:String x:Key="Str_NetSourceRemoveLocalFilesQuest">Remove local files for the selected {0} model(s)?</s:String>
     <s:String x:Key="Str_NetSourceSaveAs">Save As</s:String>
-    <s:String x:Key="Str_NetSourceClose">Close</s:String>
     <s:String x:Key="Str_NetSourcePreference">Repository Loader Options</s:String>
     <s:String x:Key="Str_NetSourceCacheRoot">Cache Directory</s:String>
     <s:String x:Key="Str_NetSourceCacheRootTooltip">GitHub repo resource root; credentials and general cache go to netcache, models and model indexes go to Spine.</s:String>

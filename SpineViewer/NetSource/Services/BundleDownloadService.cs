@@ -20,16 +20,12 @@ namespace SpineViewer.NetSource.Services
 
     public record BundleDownloadResult(
         BundleDownloadRequest Request,
-        string LocalSkelPath,
-        long TotalBytes,
-        bool AlreadyExists);
+        string LocalSkelPath);
 
     public record BundleDownloadProgress(
         string CurrentFile,
         int CompletedFiles,
-        int TotalFiles,
-        long DownloadedBytes,
-        long TotalBytes);
+        int TotalFiles);
 
     public record LocalBundleInfo(DownloadedBundleState State, DateTime? UpdatedAt);
 
@@ -84,9 +80,7 @@ namespace SpineViewer.NetSource.Services
 
             int totalFiles = jobs.Count;
             int completedFiles = 0;
-            long downloadedBytes = 0;
             var doneLock = new object();
-            bool allExist = true;
 
             using var sem = new SemaphoreSlim(Math.Max(1, FileConcurrency));
 
@@ -95,45 +89,21 @@ namespace SpineViewer.NetSource.Services
                 await sem.WaitAsync(ct);
                 try
                 {
-                    if (!req.OverwriteExisting && File.Exists(job.LocalPath))
+                    if (req.OverwriteExisting || !File.Exists(job.LocalPath))
                     {
-                        var fi = new FileInfo(job.LocalPath);
-                        lock (doneLock)
-                        {
-                            completedFiles++;
-                            downloadedBytes += fi.Length;
-                            progress?.Report(new BundleDownloadProgress(GetFileName(job.RepoPath), completedFiles, totalFiles, downloadedBytes, 0));
-                        }
-                        return;
+                        await _api.DownloadRawAsync(
+                            req.RepoConfig.Owner,
+                            req.RepoConfig.Name,
+                            commit,
+                            job.RepoPath,
+                            job.LocalPath,
+                            ct);
                     }
-
-                    allExist = false;
-
-                    long perFile = 0;
-                    var fileProgress = new Progress<long>(bytes =>
-                    {
-                        var delta = bytes - perFile;
-                        perFile = bytes;
-                        lock (doneLock)
-                        {
-                            downloadedBytes += delta;
-                            progress?.Report(new BundleDownloadProgress(GetFileName(job.RepoPath), completedFiles, totalFiles, downloadedBytes, 0));
-                        }
-                    });
-
-                    await _api.DownloadRawAsync(
-                        req.RepoConfig.Owner,
-                        req.RepoConfig.Name,
-                        commit,
-                        job.RepoPath,
-                        job.LocalPath,
-                        fileProgress,
-                        ct);
 
                     lock (doneLock)
                     {
                         completedFiles++;
-                        progress?.Report(new BundleDownloadProgress(GetFileName(job.RepoPath), completedFiles, totalFiles, downloadedBytes, 0));
+                        progress?.Report(new BundleDownloadProgress(GetFileName(job.RepoPath), completedFiles, totalFiles));
                     }
                 }
                 finally
@@ -161,18 +131,15 @@ namespace SpineViewer.NetSource.Services
             if (req.TrackInLibrary)
                 SaveDownloadIndex(req);
 
-            return new BundleDownloadResult(req, skelLocal, downloadedBytes, allExist);
+            return new BundleDownloadResult(req, skelLocal);
         }
 
-        public DownloadedBundleState GetBundleState(string repoId, SpineBundle bundle, string commitSha)
-            => GetBundleInfo(repoId, bundle, commitSha).State;
-
-        public LocalBundleInfo GetBundleInfo(string repoId, SpineBundle bundle, string commitSha)
+        public LocalBundleInfo GetBundleInfo(string repoId, SpineBundle bundle)
         {
             // 高亮状态同时检查索引和实际文件是否存在。索引匹配但文件缺失时按未下载处理。
             var index = LoadDownloadIndex(repoId);
             var key = BuildBundleKey(bundle);
-            var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, commitSha, bundle.BundleDir);
+            var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, bundle.BundleDir);
             var filesExist = BundleFilesExist(bundle, localDir);
             if (index.Bundles.TryGetValue(key, out var entry))
             {
@@ -191,9 +158,9 @@ namespace SpineViewer.NetSource.Services
             return new LocalBundleInfo(DownloadedBundleState.None, null);
         }
 
-        public bool TryGetLocalSkelPath(string repoId, SpineBundle bundle, string commitSha, out string localSkelPath)
+        public bool TryGetLocalSkelPath(string repoId, SpineBundle bundle, out string localSkelPath)
         {
-            var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, commitSha, bundle.BundleDir);
+            var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, bundle.BundleDir);
             if (BundleFilesExist(bundle, localDir))
             {
                 localSkelPath = Path.Combine(localDir, GetFileName(bundle.SkelPath));
@@ -204,7 +171,7 @@ namespace SpineViewer.NetSource.Services
             return false;
         }
 
-        public int RemoveLocalFiles(string repoId, SpineBundle bundle, string commitSha)
+        public int RemoveLocalFiles(string repoId, SpineBundle bundle)
         {
             lock (_downloadIndexLock)
             {
@@ -214,7 +181,7 @@ namespace SpineViewer.NetSource.Services
                 index.Bundles.TryGetValue(key, out var entry);
                 var indexChanged = entry is not null && index.Bundles.Remove(key);
 
-                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, commitSha, bundle.BundleDir);
+                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, bundle.BundleDir);
                 var candidates = entry is not null
                     ? BuildEntryFilePaths(entry, localDir)
                     : BuildBundleFilePaths(bundle, localDir);
@@ -222,7 +189,7 @@ namespace SpineViewer.NetSource.Services
                 var protectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var other in index.Bundles.Values)
                 {
-                    var otherLocalDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, commitSha, other.BundleDir);
+                    var otherLocalDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, other.BundleDir);
                     foreach (var path in BuildEntryFilePaths(other, otherLocalDir))
                         protectedFiles.Add(path);
                 }
@@ -253,20 +220,6 @@ namespace SpineViewer.NetSource.Services
 
                 return removed;
             }
-        }
-
-        public async Task<List<BundleDownloadResult>> DownloadManyAsync(
-            IEnumerable<BundleDownloadRequest> requests,
-            IProgress<BundleDownloadProgress>? progress,
-            CancellationToken ct)
-        {
-            var results = new List<BundleDownloadResult>();
-            foreach (var req in requests)
-            {
-                ct.ThrowIfCancellationRequested();
-                results.Add(await DownloadAsync(req, progress, ct));
-            }
-            return results;
         }
 
         private static string GetFileName(string repoPath)

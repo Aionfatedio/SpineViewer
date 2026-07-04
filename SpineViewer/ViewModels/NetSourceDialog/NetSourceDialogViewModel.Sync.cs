@@ -90,12 +90,13 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 if (_disposed || ct.IsCancellationRequested)
                     return;
 
-                _caches[item.Config.RepoId] = cache;
-                _repoDisplayNames[item.Config.RepoId] = item.DisplayName;
-
-                // 索引在后台线程完成，集合和状态回写必须切回 WPF UI 线程。
+                // 索引在后台线程完成，缓存与状态回写统一切回 WPF UI 线程，
+                // _caches 等字典只在 UI 线程读写，避免并发刷新时的竞态。
                 Application.Current.Dispatcher.Invoke(() =>
                 {
+                    _caches[item.Config.RepoId] = cache;
+                    _repoDisplayNames[item.Config.RepoId] = item.DisplayName;
+
                     item.HeadCommit = cache.HeadCommit;
                     item.HeadCommitDateDisplay = NetSourceRepoItemViewModel.FormatCommitDate(cache.HeadCommitDate);
                     item.BundleCount = cache.Bundles.Count;
@@ -147,7 +148,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         private void PersistRepoList()
         {
             _vmMain.NetSourceRepoConfigs = Repos.Select(r => r.Config).ToList();
-            _vmMain.SaveNetSourceRepoConfigs();
+            _vmMain.SaveNetSourceState();
         }
 
         private static string Str(string key)

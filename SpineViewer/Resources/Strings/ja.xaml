@@ -286,7 +286,6 @@
     <s:String x:Key="Str_AssociateFileSuffix">ファイル拡張子を関連付ける</s:String>
 
     <!-- GitHub リポジトリ読み込み -->
-    <s:String x:Key="Str_NetSourceDialogTitle">GitHub リポジトリ読み込み - Spine モデルを検索してダウンロード</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlPlaceholder">GitHub リポジトリ URL または owner/repo を入力</s:String>
     <s:String x:Key="Str_NetSourceRepoUrlTooltip">対応形式: https://github.com/owner/repo, https://github.com/owner/repo/tree/branch, owner/repo</s:String>
     <s:String x:Key="Str_NetSourceAddRepoTooltip">リポジトリを追加 (Enter キーも可)</s:String>
@@ -328,6 +327,7 @@
     <s:String x:Key="Str_NetSourceColFiles">ファイル数</s:String>
     <s:String x:Key="Str_NetSourceColCommit">コミット</s:String>
     <s:String x:Key="Str_NetSourceColCommitTime">コミット日時</s:String>
+    <s:String x:Key="Str_NetSourceHeaderSortModelTooltip">クリックでダウンロード済みモデルを名前順で先頭に固定、再度クリックで既定の順序に戻します。</s:String>
     <s:String x:Key="Str_NetSourceHeaderSortRepoTooltip">クリックでリポジトリ優先度順にソート (再度クリックで反転)。手動更新でソートはクリアされます。</s:String>
     <s:String x:Key="Str_NetSourceHeaderSortGenericTooltip">クリックでこの列をソート (再度クリックで反転)。手動更新でソートはクリアされます。</s:String>
     <s:String x:Key="Str_NetSourceDownloadAndImport">ダウンロード &amp; インポート</s:String>
@@ -336,7 +336,6 @@
     <s:String x:Key="Str_NetSourceRemoveLocalFiles">ローカルファイルを削除</s:String>
     <s:String x:Key="Str_NetSourceRemoveLocalFilesQuest">選択した {0} 個のモデルのローカルファイルを削除しますか?</s:String>
     <s:String x:Key="Str_NetSourceSaveAs">名前を付けて保存</s:String>
-    <s:String x:Key="Str_NetSourceClose">閉じる</s:String>
     <s:String x:Key="Str_NetSourcePreference">リポジトリ読み込みオプション</s:String>
     <s:String x:Key="Str_NetSourceCacheRoot">キャッシュディレクトリ</s:String>
     <s:String x:Key="Str_NetSourceCacheRootTooltip">GitHub リポジトリのリソースルート。資格情報と汎用キャッシュは netcache、モデルとモデルインデックスは Spine に保存します。</s:String>

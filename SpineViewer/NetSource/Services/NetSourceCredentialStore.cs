@@ -20,7 +20,6 @@ namespace SpineViewer.NetSource.Services
         public NetSourceCredentialStore(string cacheRoot)
         {
             _cacheRoot = cacheRoot;
-            NetSourcePathProvider.EnsureLayout(_cacheRoot);
         }
 
         public Dictionary<string, string> LoadAll()

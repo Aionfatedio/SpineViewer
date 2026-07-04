@@ -21,10 +21,7 @@ using System.Windows.Shell;
 
 namespace SpineViewer.ViewModels.MainWindow
 {
-    public readonly record struct SpineObjectLoadSummary(int Loaded, int Reused, int Failed, int Skipped)
-    {
-        public int Successful => Loaded + Reused;
-    }
+    public readonly record struct SpineObjectLoadSummary(int Loaded, int Reused, int Failed);
 
     internal enum SpineObjectLoadStatus
     {
@@ -183,7 +180,7 @@ namespace SpineViewer.ViewModels.MainWindow
             }
 
             _logger.LogCurrentProcessMemoryUsage();
-            return new SpineObjectLoadSummary(loaded, reused, failed, 0);
+            return new SpineObjectLoadSummary(loaded, reused, failed);
         }
 
         private static List<string> CollectValidSpinePaths(IEnumerable<string> paths)
@@ -247,8 +244,7 @@ namespace SpineViewer.ViewModels.MainWindow
             lock (_spineObjectModels.Lock)
             {
                 loaded = _spineObjectModels
-                    .Where(sp => PathEquals(sp.SkelPath, normalizedSkelPath)
-                        && IsPathUnderRoot(sp.SkelPath, rootPath))
+                    .Where(sp => PathEquals(sp.SkelPath, normalizedSkelPath))
                     .ToArray();
 
                 foreach (var sp in loaded)
