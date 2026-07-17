@@ -113,6 +113,9 @@ namespace SpineViewer.Models
         private AppSkin _appSkin;
 
         [ObservableProperty]
+        private int _maxParallelism;
+
+        [ObservableProperty]
         private bool _wallpaperView;
 
         [ObservableProperty]
