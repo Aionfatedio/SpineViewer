@@ -35,18 +35,24 @@ namespace SpineViewer.NetSource.Services
                 return false;
             }
 
-            bool allBatchesSucceeded = true;
+            var batches = new List<List<SpineBundle>>();
             for (int start = 0; start < pending.Count; start += GraphQLBatchSize)
-            {
-                ct.ThrowIfCancellationRequested();
-                var batch = pending.Skip(start).Take(GraphQLBatchSize).ToList();
-                var query = BuildGraphQLBatchQuery(owner, name, headSha, batch);
+                batches.Add(pending.Skip(start).Take(GraphQLBatchSize).ToList());
 
+            // 批次操作互不重叠的 bundle 切片, 无共享写冲突, 有限并发成倍缩短首次索引耗时;
+            // 并发上限保持小值以避开 GitHub 二级限流, 限流响应由 API 层按 Retry-After 退避。
+            int done = 0;
+            int anyFailed = 0;
+            using var sem = new SemaphoreSlim(GraphQLConcurrency);
+            var tasks = batches.Select(async batch =>
+            {
+                await sem.WaitAsync(ct);
                 try
                 {
+                    var query = BuildGraphQLBatchQuery(owner, name, headSha, batch);
                     var body = await _api.PostGraphQLAsync(query, ct);
                     if (!ApplyGraphQLBatch(body, batch))
-                        allBatchesSucceeded = false;
+                        Interlocked.Exchange(ref anyFailed, 1);
                 }
                 catch (OperationCanceledException)
                 {
@@ -54,16 +60,23 @@ namespace SpineViewer.NetSource.Services
                 }
                 catch (Exception ex)
                 {
-                    allBatchesSucceeded = false;
+                    Interlocked.Exchange(ref anyFailed, 1);
                     _logger.Debug(ex.ToString());
-                    _logger.Warn("GraphQL batch failed for [{0}..{1}] in {2}/{3}: {4}",
-                        start, start + batch.Count, owner, name, ex.Message);
+                    _logger.Warn("GraphQL batch failed ({0} bundle(s)) in {1}/{2}: {3}",
+                        batch.Count, owner, name, ex.Message);
+                }
+                finally
+                {
+                    sem.Release();
                 }
 
-                progress?.Report(new RepoIndexProgress(Math.Min(start + batch.Count, pending.Count), pending.Count));
-            }
+                var current = Interlocked.Add(ref done, batch.Count);
+                progress?.Report(new RepoIndexProgress(Math.Min(current, pending.Count), pending.Count));
+            }).ToArray();
 
-            return allBatchesSucceeded;
+            await Task.WhenAll(tasks);
+
+            return anyFailed == 0;
         }
 
         private static string BuildGraphQLBatchQuery(string owner, string name, string headSha, List<SpineBundle> batch)

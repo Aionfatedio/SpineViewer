@@ -19,7 +19,11 @@ namespace SpineViewer.NetSource.Services
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        private const int GraphQLBatchSize = 100;
+        // 单批别名数受服务端解析耗时约束, 过大易撞查询超时; 150 是收益与稳定的折中。
+        private const int GraphQLBatchSize = 150;
+
+        // 批次间无共享数据, 有限并发成倍缩短首次索引; 保持小值以避开 GitHub 二级限流。
+        private const int GraphQLConcurrency = 4;
 
         private const int CompareFilesSoftLimit = 300;
 
@@ -153,7 +157,7 @@ namespace SpineViewer.NetSource.Services
                     return incremental;
             }
 
-            return await RefreshFullAsync(config, branch, headSha, finalDate, ct, progress);
+            return await RefreshFullAsync(config, branch, headSha, finalDate, cached, ct, progress);
         }
 
         private async Task<RepoIndexCache> UpdateUnchangedCacheAsync(
@@ -292,6 +296,7 @@ namespace SpineViewer.NetSource.Services
             string branch,
             string headSha,
             DateTime? finalDate,
+            RepoIndexCache? previous,
             CancellationToken ct,
             IProgress<RepoIndexProgress>? progress)
         {
@@ -299,6 +304,7 @@ namespace SpineViewer.NetSource.Services
             var trees = await _api.GetTreeRecursiveAsync(config.Owner, config.Name, headSha, ct);
 
             var bundles = AggregateBundles(config.RepoId, trees);
+            InheritCommitMetadata(bundles, previous);
 
             var commitMetadataResolved = await ResolveBundleCommitsAsync(
                 bundles,
@@ -311,6 +317,36 @@ namespace SpineViewer.NetSource.Services
             var newCache = CreateCache(config, branch, headSha, finalDate, commitMetadataResolved, bundles, trees.Truncated);
             SaveCache(newCache);
             return newCache;
+        }
+
+        /// <summary>
+        /// BundleHash 未变 ⇒ bundle 文件内容未变 ⇒ 其最后提交必然未变, 直接继承旧缓存的
+        /// 提交元数据, 全量重建 (含 schema 升级) 只为真正变化的模型付 GraphQL 代价。
+        /// 仅当旧缓存元数据完整可信 (CommitMetadataResolved) 时继承, 避免带入历史回填值。
+        /// </summary>
+        private static void InheritCommitMetadata(List<SpineBundle> bundles, RepoIndexCache? previous)
+        {
+            if (previous is null || !previous.CommitMetadataResolved || previous.Bundles.Count == 0)
+                return;
+
+            var oldByKey = new Dictionary<string, SpineBundle>(StringComparer.Ordinal);
+            foreach (var old in previous.Bundles)
+            {
+                if (string.IsNullOrEmpty(old.CommitSha) || string.IsNullOrEmpty(old.BundleHash))
+                    continue;
+                oldByKey[$"{old.SkelPath}\n{old.BundleHash}"] = old;
+            }
+
+            foreach (var b in bundles)
+            {
+                if (string.IsNullOrEmpty(b.BundleHash))
+                    continue;
+                if (oldByKey.TryGetValue($"{b.SkelPath}\n{b.BundleHash}", out var old))
+                {
+                    b.CommitSha = old.CommitSha;
+                    b.CommitDate = old.CommitDate;
+                }
+            }
         }
 
         private static RepoIndexCache CreateCache(

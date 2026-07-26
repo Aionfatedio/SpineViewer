@@ -48,6 +48,9 @@ namespace SpineViewer.NetSource.Services
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private static readonly TimeSpan RetryBaseDelay = TimeSpan.FromMilliseconds(400);
 
+        // 403/429 限流按服务端 Retry-After 退避的等待上限, 超出则不再重试直接报错。
+        private static readonly TimeSpan MaxRetryAfterDelay = TimeSpan.FromSeconds(30);
+
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
             PropertyNameCaseInsensitive = true
@@ -72,7 +75,8 @@ namespace SpineViewer.NetSource.Services
             _http.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
             _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(AcceptHeader));
             _http.DefaultRequestHeaders.Add("X-GitHub-Api-Version", ApiVersion);
-            _http.Timeout = TimeSpan.FromMinutes(2);
+            // 大仓库的递归树响应可达几十 MB, 慢速网络/代理下 2 分钟不够用。
+            _http.Timeout = TimeSpan.FromMinutes(5);
 
             _token = token;
             ApplyAuthHeader();
@@ -194,20 +198,44 @@ namespace SpineViewer.NetSource.Services
 
             try
             {
-                using var resp = await SendWithRetryAsync(
-                    token => _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token),
-                    ct);
-                if (!resp.IsSuccessStatusCode)
+                // 与 SendWithRetryAsync 同一套瞬态语义, 但重试范围覆盖"落盘拷贝"阶段:
+                // 每次尝试用 FileMode.Create 重新截断目标文件, 中途断流不会留下半截数据被复用。
+                for (int attempt = 0; ; attempt++)
                 {
-                    var body = await SafeReadStringAsync(resp.Content, ct);
-                    throw new GitHubApiException(resp.StatusCode, FormatError(resp.StatusCode, body, url));
+                    TimeSpan? delay = null;
+                    try
+                    {
+                        using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+                        if (attempt < MaxTransientRetries)
+                            delay = GetTransientRetryDelay(resp, attempt);
+                        if (delay is null)
+                        {
+                            if (!resp.IsSuccessStatusCode)
+                            {
+                                var body = await SafeReadStringAsync(resp.Content, ct);
+                                throw new GitHubApiException(resp.StatusCode, FormatError(resp.StatusCode, body, url));
+                            }
+
+                            Directory.CreateDirectory(Path.GetDirectoryName(localDestPath)!);
+
+                            await using var dst = new FileStream(localDestPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+                            await using var src = await resp.Content.ReadAsStreamAsync(ct);
+                            await src.CopyToAsync(dst, 81920, ct);
+                            return;
+                        }
+                    }
+                    catch (HttpRequestException) when (attempt < MaxTransientRetries)
+                    {
+                    }
+                    catch (IOException) when (attempt < MaxTransientRetries)
+                    {
+                    }
+                    catch (TaskCanceledException) when (!ct.IsCancellationRequested && attempt < MaxTransientRetries)
+                    {
+                    }
+
+                    await Task.Delay(delay ?? RetryBaseDelay * (attempt + 1), ct);
                 }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(localDestPath)!);
-
-                await using var dst = new FileStream(localDestPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-                await using var src = await resp.Content.ReadAsStreamAsync(ct);
-                await src.CopyToAsync(dst, 81920, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -231,14 +259,13 @@ namespace SpineViewer.NetSource.Services
             var payloadJson = JsonSerializer.Serialize(new { query });
             try
             {
-                using var resp = await SendWithRetryAsync(async token =>
+                var (status, body) = await SendWithRetryAsync(async token =>
                 {
                     using var content = new StringContent(payloadJson, System.Text.Encoding.UTF8, "application/json");
                     return await _http.PostAsync(GraphQLEndpoint, content, token);
                 }, ct);
-                var body = await resp.Content.ReadAsStringAsync(ct);
-                if (!resp.IsSuccessStatusCode)
-                    throw new GitHubApiException(resp.StatusCode, FormatError(resp.StatusCode, body, GraphQLEndpoint));
+                if (!IsSuccess(status))
+                    throw new GitHubApiException(status, FormatError(status, body, GraphQLEndpoint));
                 return body;
             }
             catch (GitHubApiException)
@@ -264,17 +291,16 @@ namespace SpineViewer.NetSource.Services
         {
             try
             {
-                using var resp = await SendWithRetryAsync(
+                var (status, body) = await SendWithRetryAsync(
                     token => _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token),
                     ct);
-                var body = await resp.Content.ReadAsStringAsync(ct);
 
-                if (!resp.IsSuccessStatusCode)
-                    throw new GitHubApiException(resp.StatusCode, FormatError(resp.StatusCode, body, url));
+                if (!IsSuccess(status))
+                    throw new GitHubApiException(status, FormatError(status, body, url));
 
                 var result = JsonSerializer.Deserialize<T>(body, _jsonOptions);
                 if (result is null)
-                    throw new GitHubApiException(resp.StatusCode, "GitHub response is empty: " + url);
+                    throw new GitHubApiException(status, "GitHub response is empty: " + url);
                 return result;
             }
             catch (GitHubApiException)
@@ -294,31 +320,67 @@ namespace SpineViewer.NetSource.Services
             }
         }
 
-        private static async Task<HttpResponseMessage> SendWithRetryAsync(
+        /// <summary>
+        /// 发送请求并读取完整响应体, 带瞬态重试。重试范围必须覆盖"读体"阶段:
+        /// 大响应 (如递归树 JSON 几十 MB) 传输中途断流抛出的
+        /// HttpRequestException/IOException 与发送阶段的抖动同样按瞬态处理。
+        /// </summary>
+        private static async Task<(HttpStatusCode Status, string Body)> SendWithRetryAsync(
             Func<CancellationToken, Task<HttpResponseMessage>> send,
             CancellationToken ct)
         {
             for (int attempt = 0; ; attempt++)
             {
+                TimeSpan? delay = null;
                 try
                 {
-                    var resp = await send(ct);
-                    if (!IsTransientStatus(resp.StatusCode) || attempt >= MaxTransientRetries)
-                        return resp;
-
-                    resp.Dispose();
+                    using var resp = await send(ct);
+                    if (attempt < MaxTransientRetries)
+                        delay = GetTransientRetryDelay(resp, attempt);
+                    if (delay is null)
+                    {
+                        var body = await resp.Content.ReadAsStringAsync(ct);
+                        return (resp.StatusCode, body);
+                    }
                 }
                 catch (HttpRequestException) when (attempt < MaxTransientRetries)
+                {
+                }
+                catch (IOException) when (attempt < MaxTransientRetries)
                 {
                 }
                 catch (TaskCanceledException) when (!ct.IsCancellationRequested && attempt < MaxTransientRetries)
                 {
                 }
 
-                // 只重试网络抖动和 5xx/408，认证、限流和 404 立即返回给上层展示。
-                await Task.Delay(RetryBaseDelay * (attempt + 1), ct);
+                // 只重试网络抖动、5xx/408 和带 Retry-After 的限流; 认证失败和 404 立即返回给上层展示。
+                await Task.Delay(delay ?? RetryBaseDelay * (attempt + 1), ct);
             }
         }
+
+        /// <summary>
+        /// 状态码可重试时返回应等待的间隔, 不可重试返回 null。
+        /// 403/429 仅在带 Retry-After 且不超上限时按服务端要求退避 (二级限流场景)。
+        /// </summary>
+        private static TimeSpan? GetTransientRetryDelay(HttpResponseMessage resp, int attempt)
+        {
+            if (IsTransientStatus(resp.StatusCode))
+                return RetryBaseDelay * (attempt + 1);
+
+            if (resp.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.Forbidden)
+            {
+                var ra = resp.Headers.RetryAfter;
+                TimeSpan? d = ra?.Delta;
+                if (d is null && ra?.Date is { } date)
+                    d = date - DateTimeOffset.UtcNow;
+                if (d is { } v && v > TimeSpan.Zero && v <= MaxRetryAfterDelay)
+                    return v;
+            }
+
+            return null;
+        }
+
+        private static bool IsSuccess(HttpStatusCode code) => (int)code is >= 200 and < 300;
 
         private static bool IsTransientStatus(HttpStatusCode code)
             => code is HttpStatusCode.RequestTimeout
