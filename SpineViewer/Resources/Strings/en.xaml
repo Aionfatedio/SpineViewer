@@ -305,9 +305,9 @@
     <s:String x:Key="Str_NetSourceRepoStatusReady">Ready</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusStale">Available (partial)</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusFailed">Failed</s:String>
-    <s:String x:Key="Str_NetSourceInvalidRepoUrl">Unable to recognize the repository URL. Supported formats: https://github.com/owner/repo or owner/repo</s:String>
+    <s:String x:Key="Str_NetSourceInvalidRepoUrl">Unable to recognize the repository URL. Supported formats: https://github.com/owner/repo, owner/repo or owner/repo@branch</s:String>
     <s:String x:Key="Str_NetSourceRepoAlreadyAdded">This repository has already been added.</s:String>
-    <s:String x:Key="Str_NetSourceRemoveRepoQuest">Remove repository {0} and its local cache?</s:String>
+    <s:String x:Key="Str_NetSourceRemoveRepoQuest">Remove repository source {0}?</s:String>
     <s:String x:Key="Str_NetSourceOpenBrowserFailed">Unable to open browser: {0}</s:String>
     <s:String x:Key="Str_NetSourceStatusSummary">{0} models total · showing {1}</s:String>
     <s:String x:Key="Str_NetSourceSaveAsTitle">Save locally</s:String>

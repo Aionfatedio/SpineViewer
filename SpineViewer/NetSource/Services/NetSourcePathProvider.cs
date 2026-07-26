@@ -32,7 +32,8 @@ namespace SpineViewer.NetSource.Services
         {
             if (string.IsNullOrWhiteSpace(userConfigured))
                 return GetDefaultCacheRoot();
-            return Path.GetFullPath(userConfigured);
+            // 相对路径相对 exe 目录解析, 避免随启动方式不同的工作目录漂移。
+            return Path.GetFullPath(userConfigured, GetExeDir());
         }
 
         public static string GetNetCacheDir(string cacheRoot)

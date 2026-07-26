@@ -16,31 +16,23 @@ namespace SpineViewer.NetSource.Services
             string owner,
             string name,
             string headSha,
-            DateTime? fallbackDate,
-            bool forceAll,
             CancellationToken ct,
             IProgress<RepoIndexProgress>? progress)
         {
-            // 单个 bundle 的最后提交需要 GraphQL history 查询。无 PAT 时速率太低，
-            // 因此只保留仓库 HEAD，不启用本地蓝/黄状态判定，避免误导用户。
+            // 单个 bundle 的最后提交需要 GraphQL history 查询, 无 PAT 时速率太低, 只保留仓库 HEAD。
+            // 查询失败的批次保持 CommitSha 为空: 展示层回退到仓库 HEAD,
+            // 下次刷新只补查空缺项, 不再全量重解析。
             var pending = bundles
-                .Where(b => (forceAll || string.IsNullOrEmpty(b.CommitSha)) && !string.IsNullOrEmpty(b.SkelPath))
+                .Where(b => string.IsNullOrEmpty(b.CommitSha) && !string.IsNullOrEmpty(b.SkelPath))
                 .ToList();
             if (pending.Count == 0) return _api.HasToken;
 
-            var fallbackIso = fallbackDate?.ToString("o") ?? string.Empty;
             progress?.Report(new RepoIndexProgress(0, pending.Count));
 
             if (!_api.HasToken)
             {
                 progress?.Report(new RepoIndexProgress(pending.Count, pending.Count));
                 return false;
-            }
-
-            foreach (var b in pending)
-            {
-                b.CommitSha = null;
-                b.CommitDate = null;
             }
 
             bool allBatchesSucceeded = true;
@@ -69,15 +61,6 @@ namespace SpineViewer.NetSource.Services
                 }
 
                 progress?.Report(new RepoIndexProgress(Math.Min(start + batch.Count, pending.Count), pending.Count));
-            }
-
-            foreach (var b in pending)
-            {
-                if (string.IsNullOrEmpty(b.CommitSha))
-                {
-                    b.CommitSha = headSha;
-                    b.CommitDate = fallbackIso;
-                }
             }
 
             return allBatchesSucceeded;

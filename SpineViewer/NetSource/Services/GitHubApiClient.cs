@@ -54,32 +54,21 @@ namespace SpineViewer.NetSource.Services
         };
 
         private readonly HttpClient _http;
-        private readonly bool _ownsHttp;
         private string? _token;
 
-        public GitHubApiClient(HttpClient? httpClient = null, string? token = null, string userAgent = "SpineViewer", GitHubProxyOptions? proxy = null)
+        public GitHubApiClient(string? token = null, string userAgent = "SpineViewer", GitHubProxyOptions? proxy = null)
         {
-            if (httpClient is null)
+            var handler = new HttpClientHandler
             {
-                var handler = new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-                };
-                if (proxy is { Enabled: true } && !string.IsNullOrWhiteSpace(proxy.Host) && proxy.Port is > 0 and <= 65535)
-                {
-                    handler.Proxy = new WebProxy(proxy.Host, proxy.Port);
-                    handler.UseProxy = true;
-                }
-
-                _http = new HttpClient(handler);
-                _ownsHttp = true;
-            }
-            else
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+            };
+            if (proxy is { Enabled: true } && !string.IsNullOrWhiteSpace(proxy.Host) && proxy.Port is > 0 and <= 65535)
             {
-                _http = httpClient;
-                _ownsHttp = false;
+                handler.Proxy = new WebProxy(proxy.Host, proxy.Port);
+                handler.UseProxy = true;
             }
 
+            _http = new HttpClient(handler);
             _http.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
             _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(AcceptHeader));
             _http.DefaultRequestHeaders.Add("X-GitHub-Api-Version", ApiVersion);
@@ -100,6 +89,8 @@ namespace SpineViewer.NetSource.Services
 
         #region URL 解析
 
+        // tree/blob 后的分支只取第一段: URL 无法区分"含 / 的分支"和"分支下的子目录"
+        // (tree/main/some/dir 远比 tree/dev/wpf 常见)。需要含 / 的分支时用 owner/repo@branch 简写。
         private static readonly Regex _httpsUrlPattern = new(
             @"^https?://(?<host>github\.com)/(?<owner>[^/\s]+)/(?<name>[^/\s\?#]+?)(?:\.git)?(?:/(?:tree|blob)/(?<branch>[^/\s\?#]+))?(?:[/?#].*)?$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -109,7 +100,7 @@ namespace SpineViewer.NetSource.Services
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex _shortPattern = new(
-            @"^(?<owner>[A-Za-z0-9][A-Za-z0-9._-]*)/(?<name>[A-Za-z0-9._-]+)$",
+            @"^(?<owner>[A-Za-z0-9][A-Za-z0-9._-]*)/(?<name>[A-Za-z0-9._-]+)(?:@(?<branch>\S+))?$",
             RegexOptions.Compiled);
 
         public static GitHubRepoRef? TryParseRepoUrl(string raw)
@@ -144,7 +135,7 @@ namespace SpineViewer.NetSource.Services
                     "github.com",
                     m.Groups["owner"].Value,
                     m.Groups["name"].Value,
-                    null);
+                    m.Groups["branch"].Success ? m.Groups["branch"].Value : null);
             }
 
             return null;
@@ -368,7 +359,7 @@ namespace SpineViewer.NetSource.Services
 
         public void Dispose()
         {
-            if (_ownsHttp) _http.Dispose();
+            _http.Dispose();
         }
     }
 }

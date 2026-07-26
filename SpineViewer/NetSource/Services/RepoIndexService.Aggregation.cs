@@ -1,3 +1,4 @@
+using Spine;
 using SpineViewer.NetSource.Models;
 using System;
 using System.Collections.Generic;
@@ -37,25 +38,15 @@ namespace SpineViewer.NetSource.Services
                 {
                     bucket.TextureFiles.Add(entry);
                 }
-                else if (lowerName.EndsWith(".skel.bytes"))
-                {
-                    bucket.SkelFiles.Add((entry, ".skel.bytes"));
-                }
-                else if (lowerName.EndsWith(".skel"))
-                {
-                    bucket.SkelFiles.Add((entry, ".skel"));
-                }
-                else if (lowerName.EndsWith(".atlas.txt"))
+                else if (_atlasSuffixes.Any(lowerName.EndsWith))
                 {
                     bucket.AtlasFiles[lowerName] = entry;
                 }
-                else if (lowerName.EndsWith(".atlas"))
+                else
                 {
-                    bucket.AtlasFiles[lowerName] = entry;
-                }
-                else if (lowerName.EndsWith(".json"))
-                {
-                    bucket.JsonFiles.Add(entry);
+                    var skelSuffix = _skelSuffixes.FirstOrDefault(lowerName.EndsWith);
+                    if (skelSuffix is not null)
+                        bucket.SkelFiles.Add((entry, skelSuffix));
                 }
             }
 
@@ -65,14 +56,11 @@ namespace SpineViewer.NetSource.Services
             {
                 foreach (var (skelEntry, skelSuffix) in bucket.SkelFiles)
                 {
-                    bundles.Add(BuildBundle(repoId, dir, skelEntry, skelSuffix, bucket));
-                }
-
-                foreach (var jsonEntry in bucket.JsonFiles)
-                {
-                    var matchedAtlas = FindAtlasFor(jsonEntry.Path!, ".json", ".atlas", bucket);
-                    if (matchedAtlas is null) continue;
-                    bundles.Add(BuildBundle(repoId, dir, jsonEntry, ".json", bucket));
+                    // 所有骨架 (含 .json) 一律要求同名 atlas:
+                    // 缺 atlas 的条目下载后必然加载失败, 不进索引。
+                    var atlasEntry = FindAtlasFor(skelEntry.Path!, skelSuffix, SpineObject.PossibleSuffixMapping[skelSuffix], bucket);
+                    if (atlasEntry is null) continue;
+                    bundles.Add(BuildBundle(repoId, dir, skelEntry, skelSuffix, atlasEntry, bucket));
                 }
             }
 
@@ -81,11 +69,9 @@ namespace SpineViewer.NetSource.Services
             return bundles;
         }
 
-        private static SpineBundle BuildBundle(string repoId, string dir, GitHubTreeEntry skelEntry, string skelSuffix, DirEntry bucket)
+        private static SpineBundle BuildBundle(string repoId, string dir, GitHubTreeEntry skelEntry, string skelSuffix, GitHubTreeEntry atlasEntry, DirEntry bucket)
         {
             var skelPath = skelEntry.Path!;
-            var atlasSuffix = SkelToAtlasSuffix(skelSuffix);
-            var atlasEntry = FindAtlasFor(skelPath, skelSuffix, atlasSuffix, bucket);
             var textureFiles = SelectTextureFiles(skelPath, atlasEntry, bucket.TextureFiles)
                 .Where(p => p.Path is not null)
                 .OrderBy(p => p.Path, StringComparer.Ordinal)
@@ -97,13 +83,12 @@ namespace SpineViewer.NetSource.Services
                 BundleDir = dir,
                 ModelName = StripSuffix(GetFileName(skelPath), skelSuffix),
                 SkelPath = skelPath,
-                AtlasPath = atlasEntry?.Path,
+                AtlasPath = atlasEntry.Path,
                 TexturePaths = textureFiles.Select(p => p.Path!).ToList(),
                 BundleHash = BuildBundleHash(skelEntry, atlasEntry, textureFiles)
             };
-            long total = skelEntry.Size ?? 0;
-            int count = 1;
-            if (atlasEntry is not null) { total += atlasEntry.Size ?? 0; count++; }
+            long total = (skelEntry.Size ?? 0) + (atlasEntry.Size ?? 0);
+            int count = 2;
             foreach (var texture in textureFiles) { total += texture.Size ?? 0; count++; }
             bundle.TotalSize = total;
             bundle.FileCount = count;
@@ -168,11 +153,11 @@ namespace SpineViewer.NetSource.Services
         private static IEnumerable<string> BuildTextureBaseCandidates(string skelPath, GitHubTreeEntry? atlasEntry)
         {
             var skelName = GetFileName(skelPath);
-            foreach (var (skelSuffix, _) in _suffixPairs)
+            foreach (var suffix in _skelSuffixes)
             {
-                if (skelName.EndsWith(skelSuffix, StringComparison.OrdinalIgnoreCase))
+                if (skelName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 {
-                    yield return StripSuffix(skelName, skelSuffix);
+                    yield return StripSuffix(skelName, suffix);
                     break;
                 }
             }
@@ -180,10 +165,14 @@ namespace SpineViewer.NetSource.Services
             if (!string.IsNullOrEmpty(atlasEntry?.Path))
             {
                 var atlasName = GetFileName(atlasEntry.Path!);
-                if (atlasName.EndsWith(".atlas.txt", StringComparison.OrdinalIgnoreCase))
-                    yield return StripSuffix(atlasName, ".atlas.txt");
-                else if (atlasName.EndsWith(".atlas", StringComparison.OrdinalIgnoreCase))
-                    yield return StripSuffix(atlasName, ".atlas");
+                foreach (var suffix in _atlasSuffixes)
+                {
+                    if (atlasName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        yield return StripSuffix(atlasName, suffix);
+                        break;
+                    }
+                }
             }
         }
 
@@ -202,12 +191,9 @@ namespace SpineViewer.NetSource.Services
                 return false;
 
             var name = GetFileName(path).ToLowerInvariant();
-            return name.EndsWith(".skel.bytes")
-                || name.EndsWith(".skel")
-                || name.EndsWith(".atlas.txt")
-                || name.EndsWith(".atlas")
-                || name.EndsWith(".json")
-                || IsTextureFileName(name);
+            return IsTextureFileName(name)
+                || _skelSuffixes.Any(name.EndsWith)
+                || _atlasSuffixes.Any(name.EndsWith);
         }
 
         private static bool IsTextureFileName(string lowerName)
@@ -268,14 +254,6 @@ namespace SpineViewer.NetSource.Services
             return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         }
 
-        private static string SkelToAtlasSuffix(string skelSuffix) => skelSuffix switch
-        {
-            ".skel" => ".atlas",
-            ".skel.bytes" => ".atlas.txt",
-            ".json" => ".atlas",
-            _ => ".atlas"
-        };
-
         private static GitHubTreeEntry? FindAtlasFor(string skelPath, string skelSuffix, string atlasSuffix, DirEntry bucket)
         {
             var skelName = GetFileName(skelPath);
@@ -307,7 +285,6 @@ namespace SpineViewer.NetSource.Services
         private sealed class DirEntry
         {
             public List<(GitHubTreeEntry Entry, string Suffix)> SkelFiles { get; } = [];
-            public List<GitHubTreeEntry> JsonFiles { get; } = [];
             public Dictionary<string, GitHubTreeEntry> AtlasFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
             public List<GitHubTreeEntry> TextureFiles { get; } = [];
         }

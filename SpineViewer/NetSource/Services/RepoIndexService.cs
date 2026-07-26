@@ -1,4 +1,5 @@
 using NLog;
+using Spine;
 using SpineViewer.NetSource.Models;
 using System;
 using System.Collections.Generic;
@@ -22,14 +23,19 @@ namespace SpineViewer.NetSource.Services
 
         private const int CompareFilesSoftLimit = 300;
 
-        private const int CurrentSchemaVersion = 2;
+        // v3: 聚合规则变更 (所有骨架一律要求同名 atlas) 且提交元数据改为空值语义, 旧缓存全量重建。
+        private const int CurrentSchemaVersion = 3;
 
-        private static readonly (string Skel, string Atlas)[] _suffixPairs =
-        [
-            (".skel", ".atlas"),
-            (".skel.bytes", ".atlas.txt"),
-            (".json", ".atlas")
-        ];
+        // 骨架/atlas 后缀约定以 SpineObject.PossibleSuffixMapping 为唯一来源,
+        // 按长度降序排列保证复合后缀 (.skel.bytes/.atlas.txt) 优先匹配。
+        private static readonly string[] _skelSuffixes = SpineObject.PossibleSuffixMapping.Keys
+            .OrderByDescending(s => s.Length)
+            .ToArray();
+
+        private static readonly string[] _atlasSuffixes = SpineObject.PossibleSuffixMapping.Values
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(s => s.Length)
+            .ToArray();
 
         private static readonly string[] _textureSuffixes =
         [
@@ -93,14 +99,21 @@ namespace SpineViewer.NetSource.Services
         {
             try
             {
+                // 只删除索引缓存文件; 已下载的模型文件与下载索引永久保留,
+                // 重新添加同一仓库源 (RepoId 相同) 时本地蓝/橙状态可直接恢复。
+                var path = NetSourcePathProvider.GetRepoTreesCachePath(_cacheRoot, repoId);
+                if (File.Exists(path))
+                    File.Delete(path);
+
+                // 从未下载过任何模型时目录已空, 顺带移除; 非空 (含下载) 则保留。
                 var dir = NetSourcePathProvider.GetRepoCacheDir(_cacheRoot, repoId);
-                if (Directory.Exists(dir))
-                    Directory.Delete(dir, recursive: true);
+                if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any())
+                    Directory.Delete(dir);
             }
             catch (Exception ex)
             {
                 _logger.Debug(ex.ToString());
-                _logger.Warn("Failed to delete repo cache {0}: {1}", repoId, ex.Message);
+                _logger.Warn("Failed to delete repo index cache {0}: {1}", repoId, ex.Message);
             }
         }
 
@@ -113,12 +126,16 @@ namespace SpineViewer.NetSource.Services
             // 刷新入口先确认默认分支和 HEAD；如果 HEAD 未变，只补齐可能缺失的元数据。
             // 如果 HEAD 已变，优先走 GitHub compare 做小范围更新，失败或变更多时再全量索引。
             var repoInfo = await _api.GetRepoAsync(config.Owner, config.Name, ct);
-            if (string.IsNullOrWhiteSpace(config.Branch))
-                config.Branch = string.IsNullOrWhiteSpace(repoInfo.DefaultBranch) ? "main" : repoInfo.DefaultBranch;
+
+            // 分支未指定时按默认分支解析, 但不写回 config: RepoId 依赖 Branch,
+            // 仓库源身份必须自添加起保持稳定; 未指定分支的源始终跟随仓库默认分支。
+            var branch = !string.IsNullOrWhiteSpace(config.Branch)
+                ? config.Branch!
+                : (string.IsNullOrWhiteSpace(repoInfo.DefaultBranch) ? "main" : repoInfo.DefaultBranch!);
 
             ct.ThrowIfCancellationRequested();
 
-            var (headSha, branchCommitDate) = await _api.GetBranchHeadAsync(config.Owner, config.Name, config.Branch!, ct);
+            var (headSha, branchCommitDate) = await _api.GetBranchHeadAsync(config.Owner, config.Name, branch, ct);
 
             DateTime? finalDate = TryParseIso(repoInfo.PushedAt) ?? branchCommitDate;
 
@@ -131,12 +148,12 @@ namespace SpineViewer.NetSource.Services
                 if (string.Equals(cached.HeadCommit, headSha, StringComparison.OrdinalIgnoreCase))
                     return await UpdateUnchangedCacheAsync(config, cached, headSha, finalDate, ct, progress);
 
-                var incremental = await TryRefreshIncrementalAsync(config, cached, headSha, finalDate, ct, progress);
+                var incremental = await TryRefreshIncrementalAsync(config, branch, cached, headSha, finalDate, ct, progress);
                 if (incremental is not null)
                     return incremental;
             }
 
-            return await RefreshFullAsync(config, headSha, finalDate, ct, progress);
+            return await RefreshFullAsync(config, branch, headSha, finalDate, ct, progress);
         }
 
         private async Task<RepoIndexCache> UpdateUnchangedCacheAsync(
@@ -169,8 +186,6 @@ namespace SpineViewer.NetSource.Services
                     config.Owner,
                     config.Name,
                     headSha,
-                    finalDate,
-                    forceAll: !cached.CommitMetadataResolved,
                     ct,
                     progress);
                 dirty = true;
@@ -187,6 +202,7 @@ namespace SpineViewer.NetSource.Services
 
         private async Task<RepoIndexCache?> TryRefreshIncrementalAsync(
             RepoSourceConfig config,
+            string branch,
             RepoIndexCache cached,
             string headSha,
             DateTime? finalDate,
@@ -221,9 +237,6 @@ namespace SpineViewer.NetSource.Services
                 || compare.BehindBy > 0)
                 return null;
 
-            if (compare.Files is null)
-                return null;
-
             if (compare.Files.Count >= CompareFilesSoftLimit)
             {
                 _logger.Info("Compare file list reached {0} items for {1}/{2}; falling back to full index", compare.Files.Count, config.Owner, config.Name);
@@ -252,14 +265,13 @@ namespace SpineViewer.NetSource.Services
             bool commitMetadataResolved = cached.CommitMetadataResolved;
             if (_api.HasToken)
             {
-                var resolveTargets = cached.CommitMetadataResolved ? changedBundles : mergedBundles;
+                // 变更目录的 bundle 是新对象 (CommitSha 为空), 旧的失败项也保持空值,
+                // 直接传合并列表即可只补查空缺项。
                 commitMetadataResolved = await ResolveBundleCommitsAsync(
-                    resolveTargets,
+                    mergedBundles,
                     config.Owner,
                     config.Name,
                     headSha,
-                    finalDate,
-                    forceAll: !cached.CommitMetadataResolved,
                     ct,
                     progress);
             }
@@ -270,13 +282,14 @@ namespace SpineViewer.NetSource.Services
                 progress?.Report(new RepoIndexProgress(changedDirs.Count, changedDirs.Count));
             }
 
-            var newCache = CreateCache(config, headSha, finalDate, commitMetadataResolved, mergedBundles, trees.Truncated);
+            var newCache = CreateCache(config, branch, headSha, finalDate, commitMetadataResolved, mergedBundles, trees.Truncated);
             SaveCache(newCache);
             return newCache;
         }
 
         private async Task<RepoIndexCache> RefreshFullAsync(
             RepoSourceConfig config,
+            string branch,
             string headSha,
             DateTime? finalDate,
             CancellationToken ct,
@@ -292,18 +305,17 @@ namespace SpineViewer.NetSource.Services
                 config.Owner,
                 config.Name,
                 headSha,
-                finalDate,
-                forceAll: false,
                 ct,
                 progress);
 
-            var newCache = CreateCache(config, headSha, finalDate, commitMetadataResolved, bundles, trees.Truncated);
+            var newCache = CreateCache(config, branch, headSha, finalDate, commitMetadataResolved, bundles, trees.Truncated);
             SaveCache(newCache);
             return newCache;
         }
 
         private static RepoIndexCache CreateCache(
             RepoSourceConfig config,
+            string branch,
             string headSha,
             DateTime? finalDate,
             bool commitMetadataResolved,
@@ -317,7 +329,7 @@ namespace SpineViewer.NetSource.Services
                 Host = config.Host,
                 Owner = config.Owner,
                 Name = config.Name,
-                Branch = config.Branch!,
+                Branch = branch,
                 HeadCommit = headSha,
                 HeadCommitDate = finalDate?.ToString("o") ?? string.Empty,
                 IndexedAt = DateTime.UtcNow.ToString("o"),

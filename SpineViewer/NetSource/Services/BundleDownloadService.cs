@@ -112,20 +112,8 @@ namespace SpineViewer.NetSource.Services
                 }
             }).ToArray();
 
-            try
-            {
-                await Task.WhenAll(tasks);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex.ToString());
-                _logger.Error("Bundle download failed: {0} | {1}", b.SkelPath, ex.Message);
-                throw;
-            }
+            // 失败直接向上抛, 由调用方统一记录日志, 避免同一错误打两遍。
+            await Task.WhenAll(tasks);
 
             var skelLocal = Path.Combine(req.LocalBundleDir, GetFileName(b.SkelPath));
             if (req.TrackInLibrary)
@@ -137,11 +125,18 @@ namespace SpineViewer.NetSource.Services
         public LocalBundleInfo GetBundleInfo(string repoId, SpineBundle bundle)
         {
             // 高亮状态同时检查索引和实际文件是否存在。索引匹配但文件缺失时按未下载处理。
-            var index = LoadDownloadIndex(repoId);
-            var key = BuildBundleKey(bundle);
+            // 索引字典可能正被下载线程写入, 取条目必须持锁; 条目发布后不再原地修改,
+            // (保存时整体替换为新对象) 因此离开锁后只读是安全的。
+            DownloadIndexEntry? entry;
+            lock (_downloadIndexLock)
+            {
+                var index = LoadDownloadIndex(repoId);
+                index.Bundles.TryGetValue(BuildBundleKey(bundle), out entry);
+            }
+
             var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, bundle.BundleDir);
             var filesExist = BundleFilesExist(bundle, localDir);
-            if (index.Bundles.TryGetValue(key, out var entry))
+            if (entry is not null)
             {
                 var updatedAt = ParseIso(entry.UpdatedAt);
                 if (!filesExist)
@@ -290,6 +285,7 @@ namespace SpineViewer.NetSource.Services
                     index = new DownloadIndex();
                 }
 
+                NormalizeDownloadIndex(repoId, index);
                 _downloadIndexCache[repoId] = index;
                 return index;
             }
@@ -333,8 +329,32 @@ namespace SpineViewer.NetSource.Services
             File.WriteAllText(path, JsonSerializer.Serialize(index, _jsonOptions));
         }
 
+        // 键必须包含 SkelPath: 同目录同名的 .skel 与 .json 导出是两个不同 bundle,
+        // 只用 BundleDir+ModelName 会互相覆盖索引条目导致状态错乱。
         private static string BuildBundleKey(SpineBundle bundle)
-            => $"{bundle.BundleDir}\n{bundle.ModelName}";
+            => $"{bundle.BundleDir}\n{bundle.ModelName}\n{bundle.SkelPath}";
+
+        private static string BuildEntryKey(DownloadIndexEntry entry)
+            => $"{entry.BundleDir}\n{entry.ModelName}\n{entry.SkelPath}";
+
+        /// <summary>
+        /// 从条目自身字段重建索引键 (兼容不含 SkelPath 的旧键格式),
+        /// 并顺带清理 skel 文件已不存在的滞留条目。修改延迟到下次保存时落盘。
+        /// </summary>
+        private void NormalizeDownloadIndex(string repoId, DownloadIndex index)
+        {
+            if (index.Bundles.Count == 0) return;
+
+            var rebuilt = new Dictionary<string, DownloadIndexEntry>();
+            foreach (var entry in index.Bundles.Values)
+            {
+                if (string.IsNullOrEmpty(entry.SkelPath)) continue;
+                var localDir = NetSourcePathProvider.GetBundleLocalDir(_cacheRoot, repoId, entry.BundleDir);
+                if (!File.Exists(Path.Combine(localDir, GetFileName(entry.SkelPath)))) continue;
+                rebuilt[BuildEntryKey(entry)] = entry;
+            }
+            index.Bundles = rebuilt;
+        }
 
         private static bool EntryMatchesBundle(DownloadIndexEntry entry, SpineBundle bundle)
         {

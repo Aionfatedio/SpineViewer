@@ -1,6 +1,7 @@
 using SpineViewer.NetSource.Models;
 using SpineViewer.NetSource.Services;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -39,26 +40,40 @@ namespace SpineViewer.ViewModels.NetSourceDialog
         private async Task LoadAllAsync()
         {
             // 先展示本地缓存，保证离线启动也能看到上次索引；随后再尝试联网刷新。
-            foreach (var item in Repos.ToArray())
+            // 缓存文件读取与反序列化放到后台线程, 避免启动时大 JSON 解析阻塞 UI;
+            // 本方法从 UI 线程发起, await 之后回到 UI 上下文再写 _caches 与列表状态。
+            var items = Repos.ToArray();
+            var loadedCaches = await Task.Run(() =>
             {
-                if (_disposed || _indexCts.IsCancellationRequested)
-                    return;
-
-                var cached = _indexService.TryLoadCache(item.Config.RepoId);
-                if (cached is not null && cached.Bundles.Count > 0)
+                var list = new List<(NetSourceRepoItemViewModel Item, RepoIndexCache Cache)>();
+                foreach (var item in items)
                 {
-                    _caches[item.Config.RepoId] = cached;
-                    _repoDisplayNames[item.Config.RepoId] = item.DisplayName;
-                    item.Status = cached.Truncated ? RepoIndexStatus.Stale : RepoIndexStatus.Ready;
-                    item.HeadCommit = cached.HeadCommit;
-                    item.HeadCommitDateDisplay = NetSourceRepoItemViewModel.FormatCommitDate(cached.HeadCommitDate);
-                    item.BundleCount = cached.Bundles.Count;
-                    item.Truncated = cached.Truncated;
+                    if (_disposed || _indexCts.IsCancellationRequested)
+                        break;
+
+                    var cached = _indexService.TryLoadCache(item.Config.RepoId);
+                    if (cached is not null && cached.Bundles.Count > 0)
+                        list.Add((item, cached));
                 }
+                return list;
+            });
+
+            if (_disposed || _indexCts.IsCancellationRequested)
+                return;
+
+            foreach (var (item, cached) in loadedCaches)
+            {
+                _caches[item.Config.RepoId] = cached;
+                _repoDisplayNames[item.Config.RepoId] = item.DisplayName;
+                item.Status = cached.Truncated ? RepoIndexStatus.Stale : RepoIndexStatus.Ready;
+                item.HeadCommit = cached.HeadCommit;
+                item.HeadCommitDateDisplay = NetSourceRepoItemViewModel.FormatCommitDate(cached.HeadCommitDate);
+                item.BundleCount = cached.Bundles.Count;
+                item.Truncated = cached.Truncated;
             }
             RefreshSearch();
 
-            foreach (var item in Repos.ToArray())
+            foreach (var item in items)
             {
                 if (_disposed || _indexCts.IsCancellationRequested)
                     return;
@@ -103,6 +118,8 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                     item.Truncated = cache.Truncated;
                     item.Status = cache.Truncated ? RepoIndexStatus.Stale : RepoIndexStatus.Ready;
                     PersistRepoList();
+                    // 索引变化可能改变 bundle hash, 让本地状态缓存整体失效重查。
+                    InvalidateLocalStateCache();
                     RefreshSearch(resetSort: resetSort);
                     NotifyRepoCommandStates();
                 });

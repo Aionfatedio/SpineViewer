@@ -43,6 +43,10 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
         private readonly Dictionary<string, string> _repoDisplayNames = [];
 
+        // 本地下载状态的内存缓存 (仅 UI 线程读写), 避免每次搜索刷新都对全部结果做磁盘存在性检查。
+        // 键含 BundleHash, 索引刷新导致内容变化时旧键自然失效; 下载/更新/删除后整体清空。
+        private readonly Dictionary<string, LocalBundleInfo> _localStateCache = [];
+
         private readonly CancellationTokenSource _indexCts = new();
 
         private CancellationTokenSource? _downloadCts;
@@ -186,10 +190,9 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
             SearchResults.ReplaceAll(results.Select(r =>
             {
-                // 本地高亮依赖 bundle hash；未配置 PAT 时不解析单文件提交元数据，避免给出不可靠状态。
-                var localInfo = HasToken
-                    ? _downloadService.GetBundleInfo(r.RepoId, r.Bundle)
-                    : new LocalBundleInfo(DownloadedBundleState.None, null);
+                // 蓝/橙高亮只依赖 bundle hash 与本地文件, 均不需要 PAT;
+                // PAT 只影响提交列精度, 无 PAT 时提交列由面板隐藏。
+                var localInfo = GetCachedBundleInfo(r.RepoId, r.Bundle);
                 var item = new NetSourceBundleItemViewModel(r)
                 {
                     LocalState = localInfo.State,
@@ -283,6 +286,19 @@ namespace SpineViewer.ViewModels.NetSourceDialog
 
             SearchResults.ReplaceAll(ordered);
         }
+
+        private LocalBundleInfo GetCachedBundleInfo(string repoId, SpineBundle bundle)
+        {
+            var key = $"{repoId}\n{bundle.SkelPath}\n{bundle.BundleHash}";
+            if (_localStateCache.TryGetValue(key, out var cached))
+                return cached;
+
+            var info = _downloadService.GetBundleInfo(repoId, bundle);
+            _localStateCache[key] = info;
+            return info;
+        }
+
+        private void InvalidateLocalStateCache() => _localStateCache.Clear();
 
         public void UpdateResultContextMenuState(IList? args)
         {
@@ -378,8 +394,11 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             Repos.Remove(item);
             _caches.Remove(item.Config.RepoId);
             _repoDisplayNames.Remove(item.Config.RepoId);
+
+            // 只删除索引缓存, 已下载的模型文件永久保留 (含已加载模型), 无需卸载。
             _indexService.DeleteCache(item.Config.RepoId);
             PersistRepoList();
+            InvalidateLocalStateCache();
             RefreshSearch();
             NotifyRepoCommandStates();
         }, CanRemoveRepo);
@@ -482,8 +501,8 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             if (_disposed)
                 return;
 
+            // 搜索词/排序状态在各 setter 中已实时写回 _vmMain, 此处只需请求一次持久化。
             _disposed = true;
-            PersistSearchState();
             _vmMain.SaveNetSourceState();
             _indexCts.Cancel();
             _downloadCts?.Cancel();

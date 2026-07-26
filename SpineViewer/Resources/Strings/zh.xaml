@@ -305,7 +305,7 @@
     <s:String x:Key="Str_NetSourceRepoStatusReady">已就绪</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusStale">可用 (内容缺失)</s:String>
     <s:String x:Key="Str_NetSourceRepoStatusFailed">失败</s:String>
-    <s:String x:Key="Str_NetSourceInvalidRepoUrl">无法识别仓库地址, 支持格式: https://github.com/owner/repo 或 owner/repo</s:String>
+    <s:String x:Key="Str_NetSourceInvalidRepoUrl">无法识别仓库地址, 支持格式: https://github.com/owner/repo, owner/repo 或 owner/repo@branch</s:String>
     <s:String x:Key="Str_NetSourceRepoAlreadyAdded">该仓库已添加</s:String>
     <s:String x:Key="Str_NetSourceRemoveRepoQuest">确定移除仓库源 {0} ?</s:String>
     <s:String x:Key="Str_NetSourceOpenBrowserFailed">无法打开浏览器: {0}</s:String>

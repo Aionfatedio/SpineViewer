@@ -54,7 +54,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 if (ct.IsCancellationRequested) break;
 
                 var req = reqs[i];
-                reporter.ProgressText = $"[{i}/{total}] {req.Bundle.ModelName}";
+                reporter.ProgressText = $"[{i + 1}/{total}] {req.Bundle.ModelName}";
 
                 try
                 {
@@ -97,14 +97,26 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 return;
 
             bool saveToSelectedDir = items.Length == 1;
+            var usedDirNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var reqs = new List<BundleDownloadRequest>();
             foreach (var it in items)
             {
                 var cfg = Repos.FirstOrDefault(r => r.Config.RepoId == it.Result.RepoId)?.Config;
                 if (cfg is null) continue;
-                var localDir = saveToSelectedDir
-                    ? targetDir!
-                    : System.IO.Path.Combine(targetDir!, SanitizeName(it.Bundle.ModelName));
+                string localDir;
+                if (saveToSelectedDir)
+                {
+                    localDir = targetDir!;
+                }
+                else
+                {
+                    // 多选时同名模型 (不同仓库/目录) 各占一个子目录, 避免文件互相覆盖。
+                    var baseName = SanitizeName(it.Bundle.ModelName);
+                    var dirName = baseName;
+                    for (int n = 2; !usedDirNames.Add(dirName); n++)
+                        dirName = $"{baseName} ({n})";
+                    localDir = System.IO.Path.Combine(targetDir!, dirName);
+                }
                 reqs.Add(new BundleDownloadRequest(cfg, it.Bundle, it.Result.DownloadCommitSha, localDir, TrackInLibrary: false));
             }
             if (reqs.Count == 0) return;
@@ -151,14 +163,30 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             ProgressService.RunAsync((reporter, ct) =>
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token);
-                var (success, failed) = RunBundleDownloadLoop(reqs, reporter, linked.Token, "GitHub repo file update");
+                var updatedSkelPaths = new List<string>();
+                var (success, failed) = RunBundleDownloadLoop(
+                    reqs, reporter, linked.Token, "GitHub repo file update",
+                    result => updatedSkelPaths.Add(result.LocalSkelPath));
 
-                Application.Current.Dispatcher.Invoke(() => RefreshSearch());
+                // 已加载的旧版本模型随更新卸载重载, 避免列表显示"最新"而内存仍是旧数据。
+                var reposRoot = NetSourcePathProvider.GetReposRoot(_cacheRoot);
+                var reloadPaths = updatedSkelPaths
+                    .Where(p => _vmMain.SpineObjectListViewModel.RemoveLoadedSpineObjectFromPathIfUnderRoot(p, reposRoot) > 0)
+                    .ToList();
+                int reloaded = 0;
+                if (reloadPaths.Count > 0)
+                    reloaded = _vmMain.SpineObjectListViewModel.AddSpineObjectFilesImmediately(reloadPaths).Loaded;
+
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    InvalidateLocalStateCache();
+                    RefreshSearch();
+                });
 
                 if (failed > 0)
-                    _logger.Warn("GitHub repo file update finished: {0} success, {1} failed", success, failed);
+                    _logger.Warn("GitHub repo file update finished: {0} success, {1} failed, {2} loaded model(s) reloaded", success, failed, reloaded);
                 else
-                    _logger.Info("GitHub repo file update finished: {0} bundle(s) updated", success);
+                    _logger.Info("GitHub repo file update finished: {0} bundle(s) updated, {1} loaded model(s) reloaded", success, reloaded);
             }, Str("Str_NetSourceUpdateFilesTitle"));
         }
 
@@ -193,6 +221,7 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                 }
             }
 
+            InvalidateLocalStateCache();
             RefreshSearch();
 
             if (failedBundles > 0)
@@ -246,15 +275,13 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                     continue;
                 }
 
-                var localInfo = HasToken
-                    ? _downloadService.GetBundleInfo(it.Result.RepoId, it.Bundle)
-                    : new LocalBundleInfo(DownloadedBundleState.None, null);
+                // 蓝/橙状态判定只依赖 bundle hash 与本地文件, 不需要 PAT;
+                // 蓝色表示本地文件可直接载入 (TryGetLocalSkelPath 会再核对文件确实存在)。
+                var localInfo = GetCachedBundleInfo(it.Result.RepoId, it.Bundle);
                 var localState = localInfo.State;
                 it.LocalState = localState;
                 it.LocalUpdatedAt = localInfo.UpdatedAt;
-                // 蓝色高亮表示本地文件可直接载入；黄色或默认状态需要重新下载后再载入。
-                if (HasToken
-                    && localState == DownloadedBundleState.Current
+                if (localState == DownloadedBundleState.Current
                     && _downloadService.TryGetLocalSkelPath(it.Result.RepoId, it.Bundle, out var localSkelPath))
                 {
                     localSkelPaths.Add(localSkelPath);
@@ -270,28 +297,16 @@ namespace SpineViewer.ViewModels.NetSourceDialog
                     TrackInLibrary: true,
                     OverwriteExisting: true));
             }
-            if (reqs.Count == 0)
+            if (reqs.Count == 0 && localSkelPaths.Count == 0)
             {
-                if (localSkelPaths.Count > 0)
-                {
-                    var loadSummary = _vmMain.SpineObjectListViewModel.AddSpineObjectFilesImmediately(localSkelPaths);
-                    var totalLoaded = loadSummary.Loaded + alreadyLoaded + loadSummary.Reused;
-                    if (loadSummary.Failed > 0)
-                        _logger.Warn("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded, {1} load failed",
-                            totalLoaded, loadSummary.Failed);
-                    else
-                        _logger.Info("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded",
-                            totalLoaded);
-                }
-                else if (alreadyLoaded > 0)
-                {
+                if (alreadyLoaded > 0)
                     _logger.Info("GitHub repo import finished: 0 bundle(s) downloaded, {0} loaded", alreadyLoaded);
-                }
                 return;
             }
 
             RestartDownloadCts(out var token);
 
+            // 即使全部命中本地文件也走后台任务: 模型解析放在工作线程, 批量导入不冻结 UI。
             ProgressService.RunAsync((reporter, ct) =>
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, token);
@@ -307,19 +322,26 @@ namespace SpineViewer.ViewModels.NetSourceDialog
             CancellationToken ct)
         {
             var downloadedSkelPaths = new List<string>(localSkelPaths);
-            var (successBundle, failedBundle) = RunBundleDownloadLoop(
-                reqs, reporter, ct, "Bundle download",
-                result => downloadedSkelPaths.Add(result.LocalSkelPath));
+            var (successBundle, failedBundle) = reqs.Count > 0
+                ? RunBundleDownloadLoop(
+                    reqs, reporter, ct, "Bundle download",
+                    result => downloadedSkelPaths.Add(result.LocalSkelPath))
+                : (0, 0);
 
+            // 模型解析在当前工作线程完成 (模型集合已启用跨线程同步, 与批量添加同一路径),
+            // UI 线程只负责刷新搜索状态, 批量导入不再长时间冻结界面。
             SpineObjectLoadSummary loadSummary = default;
             if (downloadedSkelPaths.Count > 0)
             {
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    loadSummary = _vmMain.SpineObjectListViewModel.AddSpineObjectFilesImmediately(downloadedSkelPaths);
-                    RefreshSearch();
-                });
+                reporter.ProgressText = Str("Str_AddSpineObjectsTitle");
+                loadSummary = _vmMain.SpineObjectListViewModel.AddSpineObjectFilesImmediately(downloadedSkelPaths);
             }
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                InvalidateLocalStateCache();
+                RefreshSearch();
+            });
 
             var totalLoaded = loadSummary.Loaded + alreadyLoaded + loadSummary.Reused;
             if (failedBundle > 0 || loadSummary.Failed > 0)
