@@ -4,6 +4,7 @@ using Microsoft.Win32;
 using NLog;
 using Spine;
 using Spine.Implementations;
+using Spine.Interfaces;
 using SpineViewer.Models;
 using SpineViewer.NetSource.Services;
 using SpineViewer.Services;
@@ -92,6 +93,7 @@ namespace SpineViewer.ViewModels.MainWindow
             {
                 return new()
                 {
+                    DisableAtlasLoading = DisableAtlasLoading,
                     ForcePremul = ForcePremul,
                     ForceNearest = ForceNearest,
                     ForceMipmap = ForceMipmap,
@@ -136,6 +138,7 @@ namespace SpineViewer.ViewModels.MainWindow
             }
             set
             {
+                DisableAtlasLoading = value.DisableAtlasLoading;
                 ForcePremul = value.ForcePremul;
                 ForceNearest = value.ForceNearest;
                 ForceMipmap = value.ForceMipmap;
@@ -181,6 +184,12 @@ namespace SpineViewer.ViewModels.MainWindow
         }
 
         #region 纹理加载首选项
+
+        public bool DisableAtlasLoading
+        {
+            get => SpineObjectData.DisableAtlasLoading;
+            set => SetProperty(SpineObjectData.DisableAtlasLoading, value, v => SpineObjectData.DisableAtlasLoading = v);
+        }
 
         public bool ForcePremul
         {

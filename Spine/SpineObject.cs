@@ -33,6 +33,8 @@ namespace Spine
         protected readonly SpineObjectData _data;
         protected readonly ISkeleton _skeleton;
         protected readonly IAnimationState _animationState;
+        protected readonly ISkeletonClipping _clippingForTexDraw;
+        protected readonly ISkeletonClipping _clippingForIterDraw;
 
         /// <summary>
         /// 皮肤加载情况, 不含 default 皮肤
@@ -43,9 +45,9 @@ namespace Spine
         /// 构造 Spine 对象实例, 构造失败会抛出异常
         /// </summary>
         /// <param name="skelPath">skel 文件路径</param>
-        /// <param name="atlasPath">atlas 文件路径, 为空时会根据 <paramref name="skelPath"/> 进行自动检测</param>
+        /// <param name="atlasPath">atlas 文件路径, 为空字符串时会根据 <paramref name="skelPath"/> 进行自动检测, 为 <c>null</c> 则不加载纹理</param>
         /// <param name="version">要使用的运行时版本, 为空时会自动检测</param>
-        public SpineObject(string skelPath, string? atlasPath = null, SpineVersion? version = null, TextureLoader? textureLoader = null)
+        public SpineObject(string skelPath, string? atlasPath = "", SpineVersion? version = null, TextureLoader? textureLoader = null)
         {
             if (string.IsNullOrWhiteSpace(skelPath)) throw new ArgumentException(skelPath, nameof(skelPath));
             if (!File.Exists(skelPath)) throw new FileNotFoundException($"{nameof(skelPath)} not found", skelPath);
@@ -55,22 +57,23 @@ namespace Spine
             AssetsDir = Directory.GetParent(skelPath).FullName;
             Name = Path.GetFileNameWithoutExtension(skelPath);
 
-            if (string.IsNullOrWhiteSpace(atlasPath))
+            if (atlasPath is not null)
             {
-                try
+                if (string.IsNullOrWhiteSpace(atlasPath))
                 {
-                    var (skelSuffix, atlasSuffix) = PossibleSuffixMapping.First(kv => skelPath.EndsWith(kv.Key, StringComparison.OrdinalIgnoreCase));
-                    var basePath = skelPath.Substring(0, skelPath.Length - skelSuffix.Length);
-                    atlasPath = basePath + atlasSuffix;
-                    if (!File.Exists(atlasPath)) throw new FileNotFoundException("Matching atlas file not found", atlasPath);
+                    try
+                    {
+                        var (skelSuffix, atlasSuffix) = PossibleSuffixMapping.First(kv => skelPath.EndsWith(kv.Key, StringComparison.OrdinalIgnoreCase));
+                        var basePath = skelPath.Substring(0, skelPath.Length - skelSuffix.Length);
+                        atlasPath = basePath + atlasSuffix;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        throw new KeyNotFoundException($"Unrecognized skel file suffix");
+                    }
                 }
-                catch (InvalidOperationException)
-                {
-                    throw new KeyNotFoundException($"Unrecognized skel file suffix");
-                }
+                AtlasPath = Path.GetFullPath(atlasPath);
             }
-            else if (!File.Exists(atlasPath)) throw new FileNotFoundException($"{nameof(atlasPath)} not found", atlasPath);
-            AtlasPath = Path.GetFullPath(atlasPath);
 
             // 自动检测版本, 可能会抛出异常
             if (version is null)
@@ -117,14 +120,17 @@ namespace Spine
                 }
                 catch (Exception ex)
                 {
-                    _logger.Debug(ex.ToString());
-                    throw new InvalidDataException($"Failed to load spine with version '{version}'");
+                    // 此处要跳过 New 反射的那一层报错
+                    var innerEx = ex.InnerException;
+                    throw new InvalidDataException($"Failed to load spine with version '{version}' --> {innerEx?.Message}", innerEx);
                 }
             }
 
             // 创建状态实例
             _skeleton = _data.CreateSkeleton();
             _animationState = _data.CreateAnimationState();
+            _clippingForTexDraw = _data.CreateSkeletonClipping();
+            _clippingForIterDraw = _data.CreateSkeletonClipping();
 
             // 挂载一个空皮肤
             _skeleton.Skin = _data.CreateSkin(Guid.NewGuid().ToString());
@@ -155,6 +161,8 @@ namespace Spine
             // 新的实例
             _skeleton = _data.CreateSkeleton();
             _animationState = _data.CreateAnimationState();
+            _clippingForTexDraw = _data.CreateSkeletonClipping();
+            _clippingForIterDraw = _data.CreateSkeletonClipping();
 
             // 挂载一个空皮肤
             _skeleton.Skin = _data.CreateSkin(Guid.NewGuid().ToString());
@@ -237,12 +245,17 @@ namespace Spine
         /// <summary>
         /// atlas 文件完整路径
         /// </summary>
-        public string AtlasPath { get; }
+        public string? AtlasPath { get; }
 
         /// <summary>
         /// 名称
         /// </summary>
         public string Name { get; }
+
+        /// <summary>
+        /// atlas 是否成功加载
+        /// </summary>
+        public bool IsAtlasLoaded { get => _data.IsAtlasLoaded; }
 
         /// <summary>
         /// 是否使用预乘 Alpha
@@ -482,16 +495,16 @@ namespace Spine
         /// </summary>
         protected void DrawTexture(SFML.Graphics.RenderTarget target, SFML.Graphics.RenderStates states)
         {
-            _triangleVertices.Clear();
             states.Texture = null;
             states.Shader = UsePma ? SFMLShader.VertexAlphaPma : SFMLShader.VertexAlpha;
 
-            var clipping = _data.CreateSkeletonClipping();
+            _triangleVertices.Clear();
+            _clippingForTexDraw.ClipEnd();
             foreach (var slot in _skeleton.IterDrawOrder())
             {
                 if (slot.A <= 0 || !slot.Bone.Active || slot.Disabled)
                 {
-                    clipping.ClipEnd(slot);
+                    _clippingForTexDraw.ClipEnd(slot);
                     continue;
                 }
 
@@ -508,7 +521,7 @@ namespace Spine
                 float tintB = _skeleton.B * slot.B;
                 float tintA = _skeleton.A * slot.A;
 
-                SFML.Graphics.Texture texture;
+                SFML.Graphics.Texture? texture;
 
                 switch (attachment)
                 {
@@ -539,10 +552,10 @@ namespace Spine
                         texture = meshAttachment.RendererObject;
                         break;
                     case IClippingAttachment clippingAttachment:
-                        clipping.ClipStart(slot, clippingAttachment);
+                        _clippingForTexDraw.ClipStart(slot, clippingAttachment);
                         continue;
                     default:
-                        clipping.ClipEnd(slot);
+                        _clippingForTexDraw.ClipEnd(slot);
                         continue;
                 }
 
@@ -556,18 +569,15 @@ namespace Spine
                     states.Texture = texture;
                 }
 
-                if (clipping.IsClipping)
+                if (_clippingForTexDraw.IsClipping)
                 {
-                    clipping.ClipTriangles(worldVertices, worldVerticesLength, triangles, trianglesLength, uvs);
-                    worldVertices = clipping.ClippedVertices;
-                    worldVerticesLength = clipping.ClippedVerticesLength;
-                    triangles = clipping.ClippedTriangles;
-                    trianglesLength = clipping.ClippedTrianglesLength;
-                    uvs = clipping.ClippedUVs;
+                    _clippingForTexDraw.ClipTriangles(worldVertices, worldVerticesLength, triangles, trianglesLength, uvs);
+                    worldVertices = _clippingForTexDraw.ClippedVertices;
+                    worldVerticesLength = _clippingForTexDraw.ClippedVerticesLength;
+                    triangles = _clippingForTexDraw.ClippedTriangles;
+                    trianglesLength = _clippingForTexDraw.ClippedTrianglesLength;
+                    uvs = _clippingForTexDraw.ClippedUVs;
                 }
-
-                var texW = texture.Size.X;
-                var texH = texture.Size.Y;
 
                 SFML.Graphics.Vertex vt = new()
                 {
@@ -579,19 +589,34 @@ namespace Spine
                     )
                 };
 
-                for (uint i = 0; i < trianglesLength; i++)
+                if (texture?.Size is SFML.System.Vector2u texSize)
                 {
-                    var index = triangles[i] << 1;
-                    vt.Position.X = worldVertices[index];
-                    vt.Position.Y = worldVertices[index + 1];
-                    vt.TexCoords.X = uvs[index] * texW;
-                    vt.TexCoords.Y = uvs[index + 1] * texH;
-                    _triangleVertices.AddVertex(vt);
+                    uint texW = texSize.X;
+                    uint texH = texSize.Y;
+
+                    for (uint i = 0; i < trianglesLength; i++)
+                    {
+                        var index = triangles[i] << 1;
+                        vt.Position.X = worldVertices[index];
+                        vt.Position.Y = worldVertices[index + 1];
+                        vt.TexCoords.X = uvs[index] * texW;
+                        vt.TexCoords.Y = uvs[index + 1] * texH;
+                        _triangleVertices.AddVertex(vt);
+                    }
+                }
+                else
+                {
+                    for (uint i = 0; i < trianglesLength; i++)
+                    {
+                        var index = triangles[i] << 1;
+                        vt.Position.X = worldVertices[index];
+                        vt.Position.Y = worldVertices[index + 1];
+                        _triangleVertices.AddVertex(vt);
+                    }
                 }
 
-                clipping.ClipEnd(slot);
+                _clippingForTexDraw.ClipEnd(slot);
             }
-            clipping.ClipEnd();
 
             target.Draw(_triangleVertices, states);
         }
@@ -861,12 +886,12 @@ namespace Spine
             states.Texture = null;
             states.Shader = UsePma ? SFMLShader.VertexAlphaPma : SFMLShader.VertexAlpha;
 
-            var clipping = _data.CreateSkeletonClipping();
+            _clippingForIterDraw.ClipEnd();
             foreach (var slot in _skeleton.IterDrawOrder())
             {
                 if (slot.A <= 0 || !slot.Bone.Active || slot.Disabled)
                 {
-                    clipping.ClipEnd(slot);
+                    _clippingForIterDraw.ClipEnd(slot);
                     continue;
                 }
 
@@ -912,54 +937,71 @@ namespace Spine
                         states.Texture = meshAttachment.RendererObject;
                         break;
                     case IClippingAttachment clippingAttachment:
-                        clipping.ClipStart(slot, clippingAttachment);
+                        _clippingForIterDraw.ClipStart(slot, clippingAttachment);
                         continue;
                     default:
-                        clipping.ClipEnd(slot);
+                        _clippingForIterDraw.ClipEnd(slot);
                         continue;
                 }
 
-                if (clipping.IsClipping)
+                if (_clippingForIterDraw.IsClipping)
                 {
-                    clipping.ClipTriangles(worldVertices, worldVerticesLength, triangles, trianglesLength, uvs);
-                    worldVertices = clipping.ClippedVertices;
-                    worldVerticesLength = clipping.ClippedVerticesLength;
-                    triangles = clipping.ClippedTriangles;
-                    trianglesLength = clipping.ClippedTrianglesLength;
-                    uvs = clipping.ClippedUVs;
+                    _clippingForIterDraw.ClipTriangles(worldVertices, worldVerticesLength, triangles, trianglesLength, uvs);
+                    worldVertices = _clippingForIterDraw.ClippedVertices;
+                    worldVerticesLength = _clippingForIterDraw.ClippedVerticesLength;
+                    triangles = _clippingForIterDraw.ClippedTriangles;
+                    trianglesLength = _clippingForIterDraw.ClippedTrianglesLength;
+                    uvs = _clippingForIterDraw.ClippedUVs;
                 }
 
                 // 清空之前的内容
                 target.Clear(SFML.Graphics.Color.Transparent);
                 _triangleVertices.Clear();
 
-                var texW = states.Texture.Size.X;
-                var texH = states.Texture.Size.Y;
-
-                SFML.Graphics.Vertex vt = new();
-                vt.Color.R = (byte)(tintR * 255);
-                vt.Color.G = (byte)(tintG * 255);
-                vt.Color.B = (byte)(tintB * 255);
-                vt.Color.A = (byte)(tintA * 255);
-
-                for (int i = 0; i < trianglesLength; i++)
+                SFML.Graphics.Vertex vt = new()
                 {
-                    var index = triangles[i] << 1;
-                    vt.Position.X = worldVertices[index];
-                    vt.Position.Y = worldVertices[index + 1];
-                    vt.TexCoords.X = uvs[index] * texW;
-                    vt.TexCoords.Y = uvs[index + 1] * texH;
-                    _triangleVertices.AddVertex(vt);
+                    Color = new(
+                        (byte)(tintR * 255),
+                        (byte)(tintG * 255),
+                        (byte)(tintB * 255),
+                        (byte)(tintA * 255)
+                    )
+                };
+
+                if (states.Texture?.Size is SFML.System.Vector2u texSize)
+                {
+                    uint texW = texSize.X;
+                    uint texH = texSize.Y;
+
+                    for (int i = 0; i < trianglesLength; i++)
+                    {
+                        var index = triangles[i] << 1;
+                        vt.Position.X = worldVertices[index];
+                        vt.Position.Y = worldVertices[index + 1];
+                        vt.TexCoords.X = uvs[index] * texW;
+                        vt.TexCoords.Y = uvs[index + 1] * texH;
+                        _triangleVertices.AddVertex(vt);
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < trianglesLength; i++)
+                    {
+                        var index = triangles[i] << 1;
+                        vt.Position.X = worldVertices[index];
+                        vt.Position.Y = worldVertices[index + 1];
+                        _triangleVertices.AddVertex(vt);
+                    }
                 }
 
-                clipping.ClipEnd(slot);
+                _clippingForIterDraw.ClipEnd(slot);
 
                 target.Draw(_triangleVertices, states);
                 target.Display();
                 var img = target.Texture.CopyToImage();
                 yield return (slot, img);
             }
-            clipping.ClipEnd();
+
         }
 
         #endregion

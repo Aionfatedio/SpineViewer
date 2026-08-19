@@ -302,8 +302,8 @@ namespace SpineViewer.ViewModels.MainWindow
         /// <summary>
         /// 安全地在列表头添加一个模型, 发生错误会输出日志
         /// </summary>
-        /// <returns>是否添加成功</returns>
-        private SpineObjectLoadStatus InsertSpineObject(string skelPath, string? atlasPath = null)
+        /// <returns>加载、复用或失败状态</returns>
+        private SpineObjectLoadStatus InsertSpineObject(string skelPath, string? atlasPath = "")
         {
             try
             {
@@ -594,8 +594,8 @@ namespace SpineViewer.ViewModels.MainWindow
             }
             else
             {
-                ProgressService.RunAsync((pr, ct) => ReloadSpineObjectsTask(
-                    args.Cast<SpineObjectModel>().ToArray(), pr, ct),
+                ProgressService.RunAsync(
+                    (pr, ct) => ReloadSpineObjectsTask(args.Cast<SpineObjectModel>().ToArray(), pr, ct),
                     AppResource.Str_ReloadSpineObjectsTitle
                 );
             }
@@ -946,8 +946,8 @@ namespace SpineViewer.ViewModels.MainWindow
 
             if (models.Count > 1)
             {
-                ProgressService.RunAsync((pr, ct) => AddSpineObjectFromWorkspaceListTask(
-                    models, pr, ct),
+                ProgressService.RunAsync(
+                    (pr, ct) => AddSpineObjectFromWorkspaceListTask(models, pr, ct),
                     AppResource.Str_AddSpineObjectsTitle
                 );
             }
