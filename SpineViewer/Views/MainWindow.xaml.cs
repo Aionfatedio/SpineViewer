@@ -148,7 +148,11 @@ public partial class MainWindow : Window
         rtbTarget.WordColoringRules.Add(new("[F]", "White", "DarkRed"));
 
         LogManager.Configuration.AddTarget(rtbTarget);
+#if DEBUG
+        LogManager.Configuration.AddRule(LogLevel.Trace, LogLevel.Fatal, rtbTarget);
+#else
         LogManager.Configuration.AddRule(LogLevel.Debug, LogLevel.Fatal, rtbTarget);
+#endif
         LogManager.ReconfigExistingLoggers();
     }
 
@@ -513,7 +517,7 @@ public partial class MainWindow : Window
             return;
 
         // 找到包含这个 Border 的 TabItem
-        var tabItem = fe?.GetParent<ListBoxItem>();
+        var tabItem = fe.GetParent<TabItem>();
         if (tabItem is null) 
             return;
 
@@ -684,6 +688,9 @@ public partial class MainWindow : Window
 
         if (_fullScreenLayout.Visibility == Visibility.Visible) return;
 
+        // 记录已选择的对象
+        var selectedSpines = _spinesListView.SelectedItems.Cast<object>().ToArray();
+
         RootGridCol0Folded = false; // 取消折叠
 
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
@@ -719,11 +726,17 @@ public partial class MainWindow : Window
 
         _loggerBoxContainer.Child = null;
         _loggerBoxPopupContainer.Child = _loggerBoxPanel;
+
+        // 还原已选择的对象
+        foreach (var sp in selectedSpines) _spinesListView.SelectedItems.Add(sp);
     }
 
     private void SwitchToNormalLayout()
     {
         if (_fullScreenLayout.Visibility != Visibility.Visible) return;
+
+        // 记录已选择的对象
+        var selectedSpines = _spinesListView.SelectedItems.Cast<object>().ToArray();
 
         HandyControl.Controls.IconElement.SetGeometry(_fullScreenButton, AppResource.Geo_ArrowsMaximize);
 
@@ -752,6 +765,9 @@ public partial class MainWindow : Window
         WindowState = WindowState.Normal;
         WindowStyle = WindowStyle.SingleBorderWindow;
         Topmost = false;
+
+        // 还原已选择的对象
+        foreach (var sp in selectedSpines) _spinesListView.SelectedItems.Add(sp);
     }
 
     private void ButtonFullScreen_Click(object sender, RoutedEventArgs e)
